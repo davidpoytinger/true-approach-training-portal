@@ -11,7 +11,7 @@ type PlayerResponse = { data: Player[] };
 type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; CoachNotes?: string | null; Status: string };
 type SessionResponse = { data: TrainingSession[] };
 
-type Params = { playerId?: string };
+type Params = { playerId?: string; q?: string };
 
 async function getPlayers() {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=IsActive=1&orderBy=LastName,FirstName&limit=500`);
@@ -44,6 +44,11 @@ export default async function PlayerDashboard({ searchParams }: { searchParams: 
   const sessions = await getSessions(selectedPlayer.PlayerID);
   const latest = sessions[0];
   const playerId = selectedPlayer.PlayerID;
+  const query = (params.q ?? "").trim().toLowerCase();
+  const filteredSessions = sessions.filter((session) => {
+    if (!query) return true;
+    return `${session.Title} ${plainText(session.CoachNotes)} ${session.Status}`.toLowerCase().includes(query);
+  });
 
   return (
     <main className="shell">
@@ -83,20 +88,33 @@ export default async function PlayerDashboard({ searchParams }: { searchParams: 
           <h2>{latest.Title}</h2>
           <p>{displayDate(latest.SessionDate)}</p>
           {plainText(latest.CoachNotes) ? <p>{plainText(latest.CoachNotes)}</p> : null}
-          <Link className="button primary" href={`/player/session/${latest.SessionID}?playerId=${playerId}`}>View Latest Session</Link>
+          <div className="actions">
+            <Link className="button primary" href={`/player/session/${latest.SessionID}?playerId=${playerId}`}>View Latest Session</Link>
+            {latest.Status === "Player Submitted" ? <Link className="button secondary" href={`/player/session/${latest.SessionID}/edit?playerId=${playerId}`}>Edit My Session</Link> : null}
+          </div>
         </section>
       ) : null}
 
       <section className="historySection">
         <div className="sectionHeadingRow"><div><div className="label">SESSION HISTORY</div><h2>All Sessions</h2></div></div>
+        <form action="/player" method="get" className="playerSearch">
+          <input type="hidden" name="playerId" value={playerId} />
+          <input name="q" type="search" defaultValue={params.q ?? ""} placeholder="Search sessions by title or notes" />
+          <button className="button primary" type="submit">Search</button>
+        </form>
+        <p className="muted">{filteredSessions.length} session{filteredSessions.length === 1 ? "" : "s"}{query ? ` matching “${params.q}”` : ""}</p>
         <div className="historyList">
-          {sessions.map((session) => (
-            <Link key={session.SessionID} className="historyRow" href={`/player/session/${session.SessionID}?playerId=${playerId}`}>
+          {filteredSessions.map((session) => (
+            <div key={session.SessionID} className="historyRow">
               <div><strong>{session.Title}</strong><div className="muted">{session.Status === "Player Submitted" ? "Player Session" : "Coach Session"}</div></div>
-              <div className="historyMeta"><span>{displayDate(session.SessionDate)}</span><span>View →</span></div>
-            </Link>
+              <div className="historyMeta">
+                <span>{displayDate(session.SessionDate)}</span>
+                <Link className="textLink" href={`/player/session/${session.SessionID}?playerId=${playerId}`}>View</Link>
+                {session.Status === "Player Submitted" ? <Link className="textLink" href={`/player/session/${session.SessionID}/edit?playerId=${playerId}`}>Edit</Link> : null}
+              </div>
+            </div>
           ))}
-          {!sessions.length ? <p className="muted">No training sessions yet.</p> : null}
+          {!filteredSessions.length ? <p className="muted">No sessions found.</p> : null}
         </div>
       </section>
     </main>
