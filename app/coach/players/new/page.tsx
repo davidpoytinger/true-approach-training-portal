@@ -37,13 +37,13 @@ export default async function NewPlayerPage({ searchParams }: { searchParams: Pr
     <main className="shell">
       <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Player</h1></div><Link href="/coach" className="textLink">Coach Home</Link></header>
       <section className="card coachSection">
-        <div className="label">PLAYER SETUP</div><h2>Create a new player</h2>
+        <div className="label">PLAYER SETUP</div><h2>Create a New Player</h2>
         <p className="muted">Add the player here first. Once saved, you can immediately create a training session for them.</p>
         {params.error === "missing-fields" ? <p className="errorBanner">First name and last name are required.</p> : null}
         {params.error === "save-failed" ? <p className="errorBanner">Unable to create the player. Please try again.</p> : null}
         <form className="form" action={createPlayer}>
-          <label>First name<input name="firstName" type="text" required /></label>
-          <label>Last name<input name="lastName" type="text" required /></label>
+          <label>First Name<input name="firstName" type="text" required /></label>
+          <label>Last Name<input name="lastName" type="text" required /></label>
           <label>Email<input name="email" type="email" placeholder="Optional for now" /></label>
           <button className="button primary" type="submit">Create Player</button>
         </form>
