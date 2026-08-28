@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import styles from "./ParentAccountSelector.module.css";
 
 type Account = {
   AccountID: number;
@@ -25,13 +26,13 @@ export default function ParentAccountSelector({ accounts }: { accounts: Account[
   const selected = selectedId ? accounts.find((account) => account.AccountID === selectedId) ?? null : null;
 
   return (
-    <div className="parentAccountLookup">
+    <div className={styles.lookup}>
       <input type="hidden" name="existingAccountId" value={selectedId ?? ""} />
       <div className="label">FIND EXISTING ACCOUNT</div>
       <p className="muted">Search by parent name, email, or phone. If you find them, select the account and you will not need to re-enter their information.</p>
 
       {selected ? (
-        <div className="selectedAccount">
+        <div className={styles.selected}>
           <div>
             <strong>{selected.FirstName} {selected.LastName}</strong>
             <div className="muted">{selected.Email}{selected.Phone ? ` · ${selected.Phone}` : ""}</div>
@@ -48,21 +49,21 @@ export default function ParentAccountSelector({ accounts }: { accounts: Account[
             autoComplete="off"
           />
           {query.trim().length >= 2 ? (
-            <div className="accountSearchResults">
+            <div className={styles.results}>
               {matches.map((account) => (
-                <button key={account.AccountID} type="button" className="accountSearchResult" onClick={() => setSelectedId(account.AccountID)}>
+                <button key={account.AccountID} type="button" className={styles.result} onClick={() => setSelectedId(account.AccountID)}>
                   <span><strong>{account.FirstName} {account.LastName}</strong><small>{account.Email}</small></span>
                   <span>{account.Phone || "Select"}</span>
                 </button>
               ))}
-              {!matches.length ? <div className="accountSearchEmpty">No existing account found. Enter the parent information below to create one.</div> : null}
+              {!matches.length ? <div className={styles.empty}>No existing account found. Enter the parent information below to create one.</div> : null}
             </div>
           ) : null}
         </>
       )}
 
       {!selected ? (
-        <div className="newParentFields">
+        <div className={styles.newFields}>
           <div className="label">OR CREATE A NEW PARENT ACCOUNT</div>
           <label>First Name<input name="parentFirstName" type="text" /></label>
           <label>Last Name<input name="parentLastName" type="text" /></label>
