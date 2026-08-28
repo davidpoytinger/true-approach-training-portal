@@ -41,20 +41,29 @@ export async function getCaspioAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-export async function caspioFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function caspioRawFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const integrationUrl = normalizeBaseUrl(requiredEnv("CASPIO_INTEGRATION_URL"));
   const token = await getCaspioAccessToken();
   const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
 
-  const response = await fetch(`${integrationUrl}/integrations/rest/v4${path}`, {
+  return fetch(`${integrationUrl}/integrations/rest/v4${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: "application/json",
       ...(init.body && !isFormData ? { "Content-Type": "application/json" } : {}),
       ...init.headers
     },
     cache: "no-store"
+  });
+}
+
+export async function caspioFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await caspioRawFetch(path, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...init.headers
+    }
   });
 
   if (!response.ok) {
