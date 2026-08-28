@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 type CaspioTable = {
   tableId: string;
   name: string;
+  dateCreated?: string;
+  lastModified?: string;
 };
 
 type CaspioTableListResponse = {
@@ -32,13 +34,18 @@ export async function GET() {
     const possibleMatches = allTables
       .filter((table) => /(^TA_|player|training|sessionvideo|session_video)/i.test(table.name))
       .map(({ tableId, name }) => ({ tableId, name }));
+    const newestTables = [...allTables]
+      .sort((a, b) => (b.dateCreated ?? "").localeCompare(a.dateCreated ?? ""))
+      .slice(0, 12)
+      .map(({ tableId, name, dateCreated, lastModified }) => ({ tableId, name, dateCreated, lastModified }));
 
     return NextResponse.json({
       ok: true,
       source: "v4/tables",
       accessibleTableCount: result.pagination?.totalCount ?? allTables.length,
       tables: matches,
-      possibleMatches
+      possibleMatches,
+      newestTables
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Caspio error";
