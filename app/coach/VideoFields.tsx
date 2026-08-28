@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type VideoDraft = {
   id: number;
   title: string;
   note: string;
+  previewUrl?: string;
+  fileName?: string;
 };
 
 export default function VideoFields({
@@ -24,6 +26,14 @@ export default function VideoFields({
     }))
   );
 
+  useEffect(() => {
+    return () => {
+      videos.forEach((video) => {
+        if (video.previewUrl) URL.revokeObjectURL(video.previewUrl);
+      });
+    };
+  }, [videos]);
+
   function addVideo() {
     setVideos((current) => [
       ...current,
@@ -32,7 +42,26 @@ export default function VideoFields({
   }
 
   function removeVideo(id: number) {
-    setVideos((current) => current.filter((item) => item.id !== id));
+    setVideos((current) => {
+      const removed = current.find((item) => item.id === id);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  function selectVideo(id: number, file?: File) {
+    setVideos((current) =>
+      current.map((video) => {
+        if (video.id !== id) return video;
+        if (video.previewUrl) URL.revokeObjectURL(video.previewUrl);
+        if (!file) return { ...video, previewUrl: undefined, fileName: undefined };
+        return {
+          ...video,
+          previewUrl: URL.createObjectURL(file),
+          fileName: file.name
+        };
+      })
+    );
   }
 
   return (
@@ -51,8 +80,25 @@ export default function VideoFields({
             </div>
             <label>
               Video file
-              <input name="video" type="file" accept="video/*" />
+              <input
+                name="video"
+                type="file"
+                accept="video/*"
+                onChange={(event) => selectVideo(video.id, event.target.files?.[0])}
+              />
             </label>
+            {video.previewUrl ? (
+              <div className="videoPreviewWrap">
+                <video
+                  className="videoPreview"
+                  src={video.previewUrl}
+                  controls
+                  preload="metadata"
+                  playsInline
+                />
+                <span className="videoPreviewName">{video.fileName}</span>
+              </div>
+            ) : null}
             <label>
               Video title
               <input
