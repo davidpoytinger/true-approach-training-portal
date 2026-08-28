@@ -3,16 +3,36 @@ import { caspioFetch } from "../../../lib/caspio";
 
 export const dynamic = "force-dynamic";
 
+type CaspioTable = {
+  tableId: string;
+  name: string;
+};
+
+type CaspioSchemaResponse = {
+  data: CaspioTable[];
+  pagination?: {
+    totalCount?: number;
+  };
+};
+
+const TARGET_TABLES = new Set([
+  "TA_Users",
+  "TA_Players",
+  "TA_TrainingSessions",
+  "TA_SessionVideos"
+]);
+
 export async function GET() {
   try {
-    const result = await caspioFetch<unknown>("/schemas/tables");
-    const raw = JSON.stringify(result);
+    const result = await caspioFetch<CaspioSchemaResponse>("/schemas/tables?limit=1000");
+    const matches = (result.data ?? [])
+      .filter((table) => TARGET_TABLES.has(table.name))
+      .map(({ tableId, name }) => ({ tableId, name }));
 
     return NextResponse.json({
       ok: true,
-      topLevelType: Array.isArray(result) ? "array" : typeof result,
-      topLevelKeys: result && typeof result === "object" && !Array.isArray(result) ? Object.keys(result as Record<string, unknown>) : [],
-      preview: raw.slice(0, 6000)
+      accessibleTableCount: result.pagination?.totalCount ?? result.data?.length ?? 0,
+      tables: matches
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Caspio error";
