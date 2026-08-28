@@ -103,7 +103,7 @@ async function addFamilyAccess(formData: FormData) {
 
   try {
     const existingAccount = await findAccountByEmail(email);
-    let accountId = existingAccount?.AccountID;
+    let accountId: number | undefined = existingAccount?.AccountID;
     let inviteToken = "";
 
     if (!accountId) {
