@@ -4,15 +4,28 @@ import { redirect } from "next/navigation";
 import { caspioFetch } from "../../../../lib/caspio";
 import { ACCOUNTS_TABLE_ID, PLAYER_ACCESS_TABLE_ID, PLAYERS_TABLE_ID, findAccountByEmail } from "../../../../lib/player-auth";
 import { sendParentInvitation } from "../../../../lib/email";
+import ParentAccountSelector from "./ParentAccountSelector";
 
 export const dynamic = "force-dynamic";
 
 type CreatePlayerResponse = { data?: Array<{ PlayerID?: number; PK_ID?: number }>; PlayerID?: number; PK_ID?: number };
 type CreateAccountResponse = { data?: Array<{ AccountID?: number; PK_ID?: number }>; AccountID?: number; PK_ID?: number };
+type Account = { AccountID: number; FirstName: string; LastName: string; Email: string; Phone?: string | null; IsActive?: boolean };
+type AccountResponse = { data?: Account[] };
 type Params = { error?: string };
 
 function fail(code: string): never {
   redirect(`/coach/players/new?error=${code}`);
+}
+
+async function getAccounts(): Promise<Account[]> {
+  const result = await caspioFetch<AccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,IsActive&where=IsActive=1&orderBy=LastName,FirstName&limit=500`);
+  return result.data ?? [];
+}
+
+async function getAccountById(accountId: number): Promise<Account | null> {
+  const result = await caspioFetch<AccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,IsActive&where=AccountID=${accountId}&limit=1`);
+  return result.data?.[0] ?? null;
 }
 
 async function createPlayer(formData: FormData) {
@@ -29,16 +42,19 @@ async function createPlayer(formData: FormData) {
   const playerEmail = String(formData.get("playerEmail") ?? "").trim();
   const playerPhone = String(formData.get("playerPhone") ?? "").trim();
 
+  const existingAccountId = Number(formData.get("existingAccountId")) || 0;
   const parentFirstName = String(formData.get("parentFirstName") ?? "").trim();
   const parentLastName = String(formData.get("parentLastName") ?? "").trim();
   const parentEmail = String(formData.get("parentEmail") ?? "").trim().toLowerCase();
   const parentPhone = String(formData.get("parentPhone") ?? "").trim();
   const relationship = String(formData.get("relationship") ?? "Parent").trim() || "Parent";
 
-  if (!firstName || !lastName || !parentFirstName || !parentLastName || !parentEmail) fail("missing-fields");
+  if (!firstName || !lastName) fail("missing-fields");
+  if (!existingAccountId && (!parentFirstName || !parentLastName || !parentEmail)) fail("missing-parent");
 
   let playerId = 0;
   let inviteToken = "";
+  let linkedParentEmail = parentEmail;
 
   try {
     const createdPlayer = await caspioFetch<CreatePlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?echo=true`, {
@@ -58,44 +74,42 @@ async function createPlayer(formData: FormData) {
       })
     });
 
-    playerId = Number(
-      createdPlayer.data?.[0]?.PlayerID ??
-      createdPlayer.data?.[0]?.PK_ID ??
-      createdPlayer.PlayerID ??
-      createdPlayer.PK_ID
-    );
+    playerId = Number(createdPlayer.data?.[0]?.PlayerID ?? createdPlayer.data?.[0]?.PK_ID ?? createdPlayer.PlayerID ?? createdPlayer.PK_ID);
     if (!Number.isInteger(playerId) || playerId <= 0) throw new Error("Player ID was not returned");
 
-    const existingAccount = await findAccountByEmail(parentEmail);
-    let accountId = existingAccount?.AccountID;
+    let accountId = existingAccountId || 0;
 
-    if (!accountId) {
-      inviteToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
-      const createdAccount = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
-        method: "POST",
-        body: JSON.stringify({
-          FirstName: parentFirstName,
-          LastName: parentLastName,
-          Email: parentEmail,
-          Phone: parentPhone || null,
-          IsActive: true,
-          EmailVerified: false,
-          EmailVerificationTokenHash: tokenHash,
-          EmailVerificationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          CreatedAt: new Date().toISOString(),
-          UpdatedAt: new Date().toISOString()
-        })
-      });
-      accountId = Number(
-        createdAccount.data?.[0]?.AccountID ??
-        createdAccount.data?.[0]?.PK_ID ??
-        createdAccount.AccountID ??
-        createdAccount.PK_ID
-      );
-      if (!Number.isInteger(accountId) || accountId <= 0) {
-        const createdLookup = await findAccountByEmail(parentEmail);
-        accountId = createdLookup?.AccountID;
+    if (accountId) {
+      const existingAccount = await getAccountById(accountId);
+      if (!existingAccount || existingAccount.IsActive === false) throw new Error("Selected parent account was not found");
+      linkedParentEmail = existingAccount.Email;
+    } else {
+      const existingAccount = await findAccountByEmail(parentEmail);
+      accountId = existingAccount?.AccountID ?? 0;
+
+      if (!accountId) {
+        inviteToken = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
+        const createdAccount = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
+          method: "POST",
+          body: JSON.stringify({
+            FirstName: parentFirstName,
+            LastName: parentLastName,
+            Email: parentEmail,
+            Phone: parentPhone || null,
+            IsActive: true,
+            EmailVerified: false,
+            EmailVerificationTokenHash: tokenHash,
+            EmailVerificationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            CreatedAt: new Date().toISOString(),
+            UpdatedAt: new Date().toISOString()
+          })
+        });
+        accountId = Number(createdAccount.data?.[0]?.AccountID ?? createdAccount.data?.[0]?.PK_ID ?? createdAccount.AccountID ?? createdAccount.PK_ID);
+        if (!Number.isInteger(accountId) || accountId <= 0) {
+          const createdLookup = await findAccountByEmail(parentEmail);
+          accountId = createdLookup?.AccountID ?? 0;
+        }
       }
     }
 
@@ -120,12 +134,7 @@ async function createPlayer(formData: FormData) {
 
     if (inviteToken) {
       try {
-        await sendParentInvitation({
-          email: parentEmail,
-          parentName: parentFirstName,
-          playerName: `${firstName} ${lastName}`,
-          token: inviteToken
-        });
+        await sendParentInvitation({ email: parentEmail, parentName: parentFirstName, playerName: `${firstName} ${lastName}`, token: inviteToken });
       } catch (emailError) {
         console.error("Parent invitation email failed", emailError);
       }
@@ -137,16 +146,19 @@ async function createPlayer(formData: FormData) {
 
   const invitePart = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
   const emailPart = inviteToken ? "&emailed=1" : "";
-  redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(parentEmail)}${invitePart}${emailPart}`);
+  redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(linkedParentEmail)}${invitePart}${emailPart}`);
 }
 
 export default async function NewPlayerPage({ searchParams }: { searchParams: Promise<Params> }) {
   const params = await searchParams;
+  const accounts = await getAccounts();
+
   return (
     <main className="shell">
-      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Player</h1></div><Link href="/coach" className="textLink">← Coach Home</Link></header>
+      <header className="topbar"><div><h1>New Player</h1></div><Link href="/coach" className="textLink">← Coach Home</Link></header>
 
-      {params.error === "missing-fields" ? <p className="errorBanner">Player name and first parent/guardian name and email are required.</p> : null}
+      {params.error === "missing-fields" ? <p className="errorBanner">Player first and last name are required.</p> : null}
+      {params.error === "missing-parent" ? <p className="errorBanner">Select an existing parent account or enter the new parent/guardian's name and email.</p> : null}
       {params.error === "save-failed" ? <p className="errorBanner">Unable to create the player and family access. Please try again.</p> : null}
 
       <form className="form" action={createPlayer}>
@@ -170,17 +182,14 @@ export default async function NewPlayerPage({ searchParams }: { searchParams: Pr
           <div className="label">STEP 2</div>
           <h2>Primary Parent or Guardian</h2>
           <p className="muted">This person will be the first family account connected to the player and can add other family members later.</p>
-          <label>First Name<input name="parentFirstName" type="text" required /></label>
-          <label>Last Name<input name="parentLastName" type="text" required /></label>
-          <label>Email<input name="parentEmail" type="email" required /></label>
-          <label>Phone<input name="parentPhone" type="tel" /></label>
+          <ParentAccountSelector accounts={accounts} />
           <label>Relationship<select name="relationship" defaultValue="Parent"><option>Parent</option><option>Guardian</option><option>Grandparent</option><option>Other</option></select></label>
         </section>
 
         <section className="card coachSection">
           <div className="label">STEP 3</div>
           <h2>Create Player & Family Access</h2>
-          <p className="muted">If the parent already has a True Approach Dugout account, the player will be linked to it. Otherwise an invitation email will be sent so they can create a password.</p>
+          <p className="muted">If you selected an existing account, it will be linked immediately. If you entered a new parent, they will receive an invitation email to create a password.</p>
           <div className="actions"><button className="button primary" type="submit">Create Player & Parent Access</button><Link href="/coach" className="button secondary">Cancel</Link></div>
         </section>
       </form>
