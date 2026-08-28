@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-type VideoDraft = {
+type ContentDraft = {
   id: number;
   title: string;
   note: string;
   previewUrl?: string;
   fileName?: string;
+  fileType?: string;
 };
 
 export default function VideoFields({
@@ -18,7 +19,7 @@ export default function VideoFields({
   initialNotes?: string[];
 }) {
   const initialCount = Math.max(1, initialTitles.length, initialNotes.length);
-  const [videos, setVideos] = useState<VideoDraft[]>(
+  const [content, setContent] = useState<ContentDraft[]>(
     Array.from({ length: initialCount }, (_, index) => ({
       id: index + 1,
       title: initialTitles[index] ?? "",
@@ -28,37 +29,38 @@ export default function VideoFields({
 
   useEffect(() => {
     return () => {
-      videos.forEach((video) => {
-        if (video.previewUrl) URL.revokeObjectURL(video.previewUrl);
+      content.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
       });
     };
-  }, [videos]);
+  }, [content]);
 
-  function addVideo() {
-    setVideos((current) => [
+  function addContent() {
+    setContent((current) => [
       ...current,
       { id: Math.max(...current.map((item) => item.id), 0) + 1, title: "", note: "" }
     ]);
   }
 
-  function removeVideo(id: number) {
-    setVideos((current) => {
+  function removeContent(id: number) {
+    setContent((current) => {
       const removed = current.find((item) => item.id === id);
       if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
       return current.filter((item) => item.id !== id);
     });
   }
 
-  function selectVideo(id: number, file?: File) {
-    setVideos((current) =>
-      current.map((video) => {
-        if (video.id !== id) return video;
-        if (video.previewUrl) URL.revokeObjectURL(video.previewUrl);
-        if (!file) return { ...video, previewUrl: undefined, fileName: undefined };
+  function selectContent(id: number, file?: File) {
+    setContent((current) =>
+      current.map((item) => {
+        if (item.id !== id) return item;
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        if (!file) return { ...item, previewUrl: undefined, fileName: undefined, fileType: undefined };
         return {
-          ...video,
+          ...item,
           previewUrl: URL.createObjectURL(file),
-          fileName: file.name
+          fileName: file.name,
+          fileType: file.type
         };
       })
     );
@@ -66,62 +68,60 @@ export default function VideoFields({
 
   return (
     <fieldset>
-      <legend>Videos</legend>
+      <legend>Content</legend>
       <div className="videoFields">
-        {videos.map((video) => (
-          <div className="videoEntry" key={video.id}>
-            {videos.length > 1 ? (
+        {content.map((item) => (
+          <div className="videoEntry" key={item.id}>
+            {content.length > 1 ? (
               <div className="videoEntryHeader">
                 <span />
-                <button className="textButton" type="button" onClick={() => removeVideo(video.id)}>
+                <button className="textButton" type="button" onClick={() => removeContent(item.id)}>
                   Remove
                 </button>
               </div>
             ) : null}
             <label>
-              Video File
+              Content File
               <input
                 name="video"
                 type="file"
-                accept="video/*"
-                onChange={(event) => selectVideo(video.id, event.target.files?.[0])}
+                accept="video/*,image/*"
+                onChange={(event) => selectContent(item.id, event.target.files?.[0])}
               />
             </label>
-            {video.previewUrl ? (
+            {item.previewUrl ? (
               <div className="videoPreviewWrap">
-                <video
-                  className="videoPreview"
-                  src={video.previewUrl}
-                  controls
-                  preload="metadata"
-                  playsInline
-                />
-                <span className="videoPreviewName">{video.fileName}</span>
+                {item.fileType?.startsWith("image/") ? (
+                  <img className="videoPreview" src={item.previewUrl} alt={item.title || item.fileName || "Content preview"} />
+                ) : (
+                  <video className="videoPreview" src={item.previewUrl} controls preload="metadata" playsInline />
+                )}
+                <span className="videoPreviewName">{item.fileName}</span>
               </div>
             ) : null}
             <label>
-              Video Title
+              Content Title
               <input
                 name="videoTitle"
                 type="text"
                 placeholder="Example: Front View"
-                defaultValue={video.title}
+                defaultValue={item.title}
               />
             </label>
             <label>
-              Video Coach Note
+              Content Coach Note
               <textarea
                 name="videoNote"
                 rows={3}
-                placeholder="Optional note for this video"
-                defaultValue={video.note}
+                placeholder="Optional note for this content"
+                defaultValue={item.note}
               />
             </label>
           </div>
         ))}
       </div>
-      <button className="button secondary addVideoButton" type="button" onClick={addVideo}>
-        + Add Another Video
+      <button className="button secondary addVideoButton" type="button" onClick={addContent}>
+        + Add Another Content Item
       </button>
     </fieldset>
   );
