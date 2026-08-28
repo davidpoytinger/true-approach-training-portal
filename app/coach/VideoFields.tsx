@@ -79,7 +79,7 @@ export default function VideoFields({
               </div>
             ) : null}
             <label>
-              Video file
+              Video File
               <input
                 name="video"
                 type="file"
@@ -100,7 +100,7 @@ export default function VideoFields({
               </div>
             ) : null}
             <label>
-              Video title
+              Video Title
               <input
                 name="videoTitle"
                 type="text"
@@ -109,7 +109,7 @@ export default function VideoFields({
               />
             </label>
             <label>
-              Video coach note
+              Video Coach Note
               <textarea
                 name="videoNote"
                 rows={3}
