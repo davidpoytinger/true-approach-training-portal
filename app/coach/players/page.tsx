@@ -10,7 +10,7 @@ type Player = { PlayerID: number; FirstName: string; LastName: string; Email?: s
 type PlayerResponse = { data: Player[] };
 type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; Status: string };
 type SessionResponse = { data: TrainingSession[] };
-type Params = { q?: string; created?: string };
+type Params = { q?: string; created?: string; playerId?: string; parent?: string; invite?: string };
 
 async function getPlayers(): Promise<Player[]> {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,Email,IsActive&orderBy=LastName,FirstName&limit=500`);
@@ -42,11 +42,18 @@ export default async function PlayerSearchPage({ searchParams }: { searchParams:
     sessionsByPlayer.set(session.PlayerID, current);
   });
 
+  const createdPlayer = params.playerId ? players.find((p) => p.PlayerID === Number(params.playerId)) : null;
+  const inviteUrl = params.invite ? `https://true-approach-training-portal.vercel.app/accept-invite?token=${params.invite}` : "";
+
   return (
     <main className="shell">
-      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Players</h1></div><Link href="/coach" className="textLink">Coach Home</Link></header>
+      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Players</h1></div><Link href="/coach" className="textLink">← Coach Home</Link></header>
 
-      {params.created === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>Player created successfully</strong><p>The new player is ready for training sessions.</p></div></div> : null}
+      {params.created === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>{createdPlayer ? `${createdPlayer.FirstName} ${createdPlayer.LastName} created successfully` : "Player created successfully"}</strong><p>{params.parent ? `Primary family access was connected to ${params.parent}.` : "The player is ready for training sessions."}</p></div></div> : null}
+
+      {params.created === "1" && params.invite ? <section className="card coachSection"><div className="label">PARENT INVITATION</div><h2>Send the Parent Their Login Invitation</h2><p className="muted">Email delivery is not connected yet, so copy this link and send it to {params.parent || "the parent"}. It expires in 7 days.</p><input readOnly value={inviteUrl}/><div className="actions" style={{marginTop:16}}>{createdPlayer ? <Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link> : null}</div></section> : null}
+
+      {params.created === "1" && !params.invite && createdPlayer ? <section className="card coachSection"><div className="label">FAMILY ACCESS</div><h2>Existing Parent Account Linked</h2><p className="muted">The parent already had a True Approach account, so no invitation is needed.</p><Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link></section> : null}
 
       <section className="card coachSection">
         <div className="sectionHeadingRow"><div><div className="label">PLAYER DIRECTORY</div><h2>Search existing players</h2></div><Link href="/coach/players/new" className="button secondary">+ New Player</Link></div>
