@@ -6,9 +6,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const session = mockSessions.find((s) => s.id === Number(id)) ?? mockSessions[0];
   return (
     <main className="shell">
-      <Link href="/player" className="textLink">← Back to sessions</Link>
+      <Link href="/player" className="textLink">← Back to Sessions</Link>
       <section className="pageHeading"><div className="eyebrow">{session.date}</div><h1>{session.title}</h1><p className="lead">{session.coachNotes}</p></section>
-      <div className="stack">{session.videos.map((video, index) => <article className="card videoCard" key={video.id}><div className="videoPlaceholder"><span>Video {index + 1}</span></div><h2>{video.title}</h2>{video.note && <p>{video.note}</p>}</article>)}</div>
+      <div className="stack">{session.videos.map((content, index) => <article className="card videoCard" key={content.id}><div className="videoPlaceholder"><span>Content {index + 1}</span></div><h2>{content.title}</h2>{content.note && <p>{content.note}</p>}</article>)}</div>
     </main>
   );
 }
