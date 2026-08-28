@@ -41,11 +41,11 @@ export async function getCaspioAccessToken(): Promise<string> {
   return data.access_token;
 }
 
-async function caspioRequest<T>(version: "v3" | "v4", path: string, init: RequestInit = {}): Promise<T> {
+export async function caspioFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const integrationUrl = normalizeBaseUrl(requiredEnv("CASPIO_INTEGRATION_URL"));
   const token = await getCaspioAccessToken();
 
-  const response = await fetch(`${integrationUrl}/integrations/rest/${version}${path}`, {
+  const response = await fetch(`${integrationUrl}/integrations/rest/v4${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
@@ -58,16 +58,8 @@ async function caspioRequest<T>(version: "v3" | "v4", path: string, init: Reques
 
   if (!response.ok) {
     const details = await response.text();
-    throw new Error(`Caspio ${version} request failed: ${response.status} ${details}`);
+    throw new Error(`Caspio v4 request failed: ${response.status} ${details}`);
   }
 
   return response.json() as Promise<T>;
-}
-
-export async function caspioFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return caspioRequest<T>("v4", path, init);
-}
-
-export async function caspioFetchV3<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return caspioRequest<T>("v3", path, init);
 }
