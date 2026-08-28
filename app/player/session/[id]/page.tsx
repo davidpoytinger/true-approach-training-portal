@@ -7,21 +7,13 @@ export const dynamic = "force-dynamic";
 const SESSIONS_TABLE_ID = "o1u972";
 const SESSION_VIDEOS_TABLE_ID = "c7s9mf";
 
-type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; CoachNotes?: string | null; Status: string };
+type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; CoachNotes?: string | null; Status: string; SessionSource?: string | null };
 type SessionResponse = { data: TrainingSession[] };
 type SessionVideo = { VideoID: number; SessionID: number; VideoFile: string; Title: string; CoachNote?: string | null; DisplayOrder?: number | null };
 type VideoResponse = { data: SessionVideo[] };
 
-async function getSession(sessionId: number) {
-  const result = await caspioFetch<SessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?select=SessionID,PlayerID,SessionDate,Title,CoachNotes,Status&where=SessionID=${sessionId}&limit=1`);
-  return result.data?.[0] ?? null;
-}
-
-async function getContent(sessionId: number) {
-  const result = await caspioFetch<VideoResponse>(`/tables/${SESSION_VIDEOS_TABLE_ID}/records?select=VideoID,SessionID,VideoFile,Title,CoachNote,DisplayOrder&where=SessionID=${sessionId}&orderBy=DisplayOrder,VideoID&limit=200`);
-  return result.data ?? [];
-}
-
+async function getSession(sessionId: number) { const result = await caspioFetch<SessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?select=SessionID,PlayerID,SessionDate,Title,CoachNotes,Status,SessionSource&where=SessionID=${sessionId}&limit=1`); return result.data?.[0] ?? null; }
+async function getContent(sessionId: number) { const result = await caspioFetch<VideoResponse>(`/tables/${SESSION_VIDEOS_TABLE_ID}/records?select=VideoID,SessionID,VideoFile,Title,CoachNote,DisplayOrder&where=SessionID=${sessionId}&orderBy=DisplayOrder,VideoID&limit=200`); return result.data ?? []; }
 function dateValue(value: string) { return new Date(value).toISOString().slice(0, 10); }
 function fileName(path: string) { return decodeURIComponent(path.split("/").filter(Boolean).pop() ?? path); }
 function isImagePath(path: string) { return /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(fileName(path)); }
@@ -41,43 +33,22 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   if (Number.isInteger(playerId) && playerId > 0 && session.PlayerID !== playerId) notFound();
 
   const backHref = `/player?playerId=${session.PlayerID}`;
-  const playerCreated = session.Status === "Player Submitted";
+  const playerCreated = session.SessionSource === "Player";
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Review Session</h1></div>
-        <Link href={backHref} className="textLink">← Player Portal</Link>
-      </header>
-
+      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Review Session</h1></div><Link href={backHref} className="textLink">← Player Portal</Link></header>
       <section className="card coachSection">
-        <div className="sectionHeadingRow">
-          <div><div className="label">SESSION HISTORY</div><h2>{session.Title}</h2></div>
-          {playerCreated ? <Link className="button secondary" href={`/player/session/${session.SessionID}/edit?playerId=${session.PlayerID}`}>Edit My Session</Link> : null}
-        </div>
+        <div className="sectionHeadingRow"><div><div className="label">SESSION HISTORY</div><h2>{session.Title}</h2></div>{playerCreated ? <Link className="button secondary" href={`/player/session/${session.SessionID}/edit?playerId=${session.PlayerID}`}>Edit My Session</Link> : null}</div>
         {query.created === "1" ? <div className="successBanner"><div className="successIcon">✓</div><div><strong>Session added successfully</strong><p>Your player session was saved.</p></div></div> : null}
         {query.saved === "1" ? <div className="successBanner"><div className="successIcon">✓</div><div><strong>Changes saved</strong><p>Your player session was updated.</p></div></div> : null}
-
         <div className="form readOnlyForm">
           <label>Session Date<input type="date" value={dateValue(session.SessionDate)} readOnly /></label>
           <label>Session Title<input type="text" value={session.Title} readOnly /></label>
-          <div className="formField">
-            <div className="formFieldLabel">{playerCreated ? "Your Session Notes" : "Overall Coach Notes"}</div>
-            <div className="readOnlyRichText" dangerouslySetInnerHTML={{ __html: safeRichText(session.CoachNotes) || "<span class='muted'>No notes for this session.</span>" }} />
-          </div>
-
-          <fieldset>
-            <legend>Content</legend>
-            <div className="videoFields">
-              {content.length ? content.map((item) => (
-                <div className="videoEntry" key={item.VideoID}>
-                  {isImagePath(item.VideoFile) ? <img className="storedVideoPreview" src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} /> : isDocumentPath(item.VideoFile) ? <a className="documentPreview storedDocument" href={`/api/video/${item.VideoID}`} target="_blank" rel="noreferrer"><div className="documentIcon">{documentLabel(item.VideoFile)}</div><span><strong>{item.Title || fileName(item.VideoFile)}</strong><small>{fileName(item.VideoFile)}</small></span></a> : <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${item.VideoID}`}>Your browser does not support video playback.</video>}
-                  <label>Content Title<input type="text" value={item.Title} readOnly /></label>
-                  <label>{playerCreated ? "Your Note" : "Content Coach Note"}<textarea rows={3} value={item.CoachNote ?? ""} readOnly /></label>
-                </div>
-              )) : <p className="muted">This session does not have any content.</p>}
-            </div>
-          </fieldset>
+          <div className="formField"><div className="formFieldLabel">{playerCreated ? "Your Session Notes" : "Overall Coach Notes"}</div><div className="readOnlyRichText" dangerouslySetInnerHTML={{ __html: safeRichText(session.CoachNotes) || "<span class='muted'>No notes for this session.</span>" }} /></div>
+          <fieldset><legend>Content</legend><div className="videoFields">
+            {content.length ? content.map((item) => <div className="videoEntry" key={item.VideoID}>{isImagePath(item.VideoFile) ? <img className="storedVideoPreview" src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} /> : isDocumentPath(item.VideoFile) ? <a className="documentPreview storedDocument" href={`/api/video/${item.VideoID}`} target="_blank" rel="noreferrer"><div className="documentIcon">{documentLabel(item.VideoFile)}</div><span><strong>{item.Title || fileName(item.VideoFile)}</strong><small>{fileName(item.VideoFile)}</small></span></a> : <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${item.VideoID}`}>Your browser does not support video playback.</video>}<label>Content Title<input type="text" value={item.Title} readOnly /></label><label>{playerCreated ? "Your Note" : "Content Coach Note"}<textarea rows={3} value={item.CoachNote ?? ""} readOnly /></label></div>) : <p className="muted">This session does not have any content.</p>}
+          </div></fieldset>
         </div>
       </section>
     </main>
