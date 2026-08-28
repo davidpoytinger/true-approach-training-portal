@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { caspioFetch } from "../../../../lib/caspio";
 import { ACCOUNTS_TABLE_ID, PLAYER_ACCESS_TABLE_ID, PLAYERS_TABLE_ID, findAccountByEmail } from "../../../../lib/player-auth";
+import { sendParentInvitation } from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -115,8 +116,22 @@ async function createPlayer(formData: FormData) {
       })
     });
 
+    if (inviteToken) {
+      try {
+        await sendParentInvitation({
+          email: parentEmail,
+          parentName: parentFirstName,
+          playerName: `${firstName} ${lastName}`,
+          token: inviteToken
+        });
+      } catch (emailError) {
+        console.error("Parent invitation email failed", emailError);
+      }
+    }
+
     const invitePart = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
-    redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(parentEmail)}${invitePart}`);
+    const emailPart = inviteToken ? "&emailed=1" : "";
+    redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(parentEmail)}${invitePart}${emailPart}`);
   } catch (error) {
     console.error("Create player and parent failed", error);
     fail("save-failed");
@@ -163,7 +178,7 @@ export default async function NewPlayerPage({ searchParams }: { searchParams: Pr
         <section className="card coachSection">
           <div className="label">STEP 3</div>
           <h2>Create Player & Family Access</h2>
-          <p className="muted">If the parent already has a True Approach account, the player will be linked to it. Otherwise an invitation will be created for them to set a password.</p>
+          <p className="muted">If the parent already has a True Approach Dugout account, the player will be linked to it. Otherwise an invitation email will be sent so they can create a password.</p>
           <div className="actions"><button className="button primary" type="submit">Create Player & Parent Access</button><Link href="/coach" className="button secondary">Cancel</Link></div>
         </section>
       </form>
