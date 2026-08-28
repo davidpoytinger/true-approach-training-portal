@@ -44,18 +44,14 @@ async function createVideoThumbnail(file: File): Promise<string | undefined> {
     video.onerror = fail;
     video.onloadedmetadata = () => {
       const target = Number.isFinite(video.duration) && video.duration > 0 ? Math.min(0.75, Math.max(0.1, video.duration * 0.1)) : 0.1;
-      try {
-        video.currentTime = target;
-      } catch {
-        fail();
-      }
+      try { video.currentTime = target; } catch { fail(); }
     };
 
     video.onseeked = () => {
       try {
         const sourceWidth = video.videoWidth || 1280;
         const sourceHeight = video.videoHeight || 720;
-        const maxWidth = 640;
+        const maxWidth = 240;
         const scale = Math.min(1, maxWidth / sourceWidth);
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(sourceWidth * scale));
@@ -63,12 +59,10 @@ async function createVideoThumbnail(file: File): Promise<string | undefined> {
         const context = canvas.getContext("2d");
         if (!context) return fail();
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL("image/jpeg", 0.78);
+        const data = canvas.toDataURL("image/jpeg", 0.55);
         cleanup();
-        resolve(data);
-      } catch {
-        fail();
-      }
+        resolve(data.length <= 80000 ? data : undefined);
+      } catch { fail(); }
     };
 
     video.src = url;
@@ -93,9 +87,7 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""] 
 
     if (file?.type.startsWith("video/")) {
       const thumbnail = await createVideoThumbnail(file);
-      if (thumbnail) {
-        setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, emailThumbnailData: thumbnail } : item));
-      }
+      if (thumbnail) setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, emailThumbnailData: thumbnail } : item));
     }
   }
 
