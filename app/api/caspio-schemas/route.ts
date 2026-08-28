@@ -8,7 +8,7 @@ type CaspioTable = {
   name: string;
 };
 
-type CaspioSchemaResponse = {
+type CaspioTableListResponse = {
   data: CaspioTable[];
   pagination?: {
     totalCount?: number;
@@ -24,7 +24,7 @@ const TARGET_TABLES = new Set([
 
 export async function GET() {
   try {
-    const result = await caspioFetch<CaspioSchemaResponse>("/schemas/tables?limit=1000");
+    const result = await caspioFetch<CaspioTableListResponse>("/tables?limit=1000");
     const allTables = result.data ?? [];
     const matches = allTables
       .filter((table) => TARGET_TABLES.has(table.name))
@@ -35,6 +35,7 @@ export async function GET() {
 
     return NextResponse.json({
       ok: true,
+      source: "v4/tables",
       accessibleTableCount: result.pagination?.totalCount ?? allTables.length,
       tables: matches,
       possibleMatches
