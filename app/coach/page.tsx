@@ -37,7 +37,7 @@ export default function CoachDashboard() {
           <div className="coachActionIcon">▶</div>
           <div>
             <h3>Add a New Session</h3>
-            <p>Select a player, add notes and videos, preview everything, and publish the session.</p>
+            <p>Select a player, add notes and content, preview everything, and publish the session.</p>
           </div>
           <span className="coachActionArrow">→</span>
         </Link>
