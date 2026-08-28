@@ -14,7 +14,15 @@ type PlayerResponse = { data: Player[] };
 type CreateSessionResponse = { data?: Array<{ SessionID?: number }>; SessionID?: number; PK_ID?: number };
 type UploadResponse = { data: Array<{ fullFilePath: string }> };
 
-type Params = { playerId?: string; error?: string };
+type Params = {
+  playerId?: string;
+  error?: string;
+  sessionDate?: string;
+  title?: string;
+  sessionNotes?: string;
+  contentTitles?: string;
+  contentNotes?: string;
+};
 
 async function getPlayer(playerId: number) {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=PlayerID=${playerId}&limit=1`);
@@ -24,6 +32,36 @@ async function getPlayer(playerId: number) {
 function uniqueFileName(originalName: string, index: number) {
   const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
   return `${Date.now()}-${index + 1}-${safeName}`;
+}
+
+function parseArray(value?: string) {
+  if (!value) return [""];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.length ? parsed.map((item) => String(item ?? "")) : [""];
+  } catch {
+    return [""];
+  }
+}
+
+function errorRedirect(values: {
+  playerId: number;
+  sessionDate: string;
+  title: string;
+  sessionNotes: string;
+  contentTitles: string[];
+  contentNotes: string[];
+}) {
+  const params = new URLSearchParams({
+    playerId: String(values.playerId),
+    error: "save-failed",
+    sessionDate: values.sessionDate,
+    title: values.title,
+    sessionNotes: values.sessionNotes,
+    contentTitles: JSON.stringify(values.contentTitles),
+    contentNotes: JSON.stringify(values.contentNotes)
+  });
+  redirect(`/player/session/new?${params.toString()}`);
 }
 
 async function uploadContent(file: File, index: number) {
@@ -51,6 +89,8 @@ async function publishPlayerSession(formData: FormData) {
     redirect(`/player/session/new?playerId=${playerId}&error=missing-fields`);
   }
 
+  let sessionId: number | undefined;
+
   try {
     const created = await caspioFetch<CreateSessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?echo=true`, {
       method: "POST",
@@ -64,7 +104,7 @@ async function publishPlayerSession(formData: FormData) {
       })
     });
 
-    const sessionId = created.data?.[0]?.SessionID ?? created.SessionID ?? created.PK_ID;
+    sessionId = created.data?.[0]?.SessionID ?? created.SessionID ?? created.PK_ID;
     if (!sessionId) throw new Error("Session ID was not returned");
 
     for (let index = 0; index < files.length; index += 1) {
@@ -81,12 +121,12 @@ async function publishPlayerSession(formData: FormData) {
         })
       });
     }
-
-    redirect(`/player/session/${sessionId}?playerId=${playerId}&created=1`);
   } catch (error) {
     console.error("Player session publish failed", error);
-    redirect(`/player/session/new?playerId=${playerId}&error=save-failed`);
+    errorRedirect({ playerId, sessionDate, title, sessionNotes, contentTitles: titles, contentNotes: notes });
   }
+
+  redirect(`/player/session/${sessionId}?playerId=${playerId}&created=1`);
 }
 
 export default async function NewPlayerSessionPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -98,6 +138,9 @@ export default async function NewPlayerSessionPage({ searchParams }: { searchPar
   if (!player || !player.IsActive) notFound();
 
   const today = new Date().toISOString().slice(0, 10);
+  const retrying = params.error === "save-failed";
+  const initialTitles = retrying ? parseArray(params.contentTitles) : [""];
+  const initialNotes = retrying ? parseArray(params.contentNotes) : [""];
 
   return (
     <main className="shell">
@@ -112,14 +155,14 @@ export default async function NewPlayerSessionPage({ searchParams }: { searchPar
         <p className="muted">Upload videos or pictures from your own training so you and your coach can review them later.</p>
 
         {params.error === "missing-fields" ? <p className="errorBanner">Session date and title are required.</p> : null}
-        {params.error === "save-failed" ? <p className="errorBanner">Unable to save this session. Please reselect your content files and try again.</p> : null}
+        {retrying ? <p className="errorBanner">Unable to save this session. Your text was preserved below. Please reselect your content files and try again.</p> : null}
 
         <form className="form" action={publishPlayerSession}>
           <input type="hidden" name="playerId" value={playerId} />
-          <label>Session Date<input name="sessionDate" type="date" defaultValue={today} required /></label>
-          <label>Session Title<input name="title" type="text" defaultValue="Player Session" required /></label>
-          <label>Session Notes<textarea name="sessionNotes" rows={5} placeholder="What did you work on? What felt good? What do you want your coach to look at?" /></label>
-          <PlayerContentFields />
+          <label>Session Date<input name="sessionDate" type="date" defaultValue={retrying ? params.sessionDate ?? today : today} required /></label>
+          <label>Session Title<input name="title" type="text" defaultValue={retrying ? params.title ?? "Player Session" : "Player Session"} required /></label>
+          <label>Session Notes<textarea name="sessionNotes" rows={5} placeholder="What did you work on? What felt good? What do you want your coach to look at?" defaultValue={retrying ? params.sessionNotes ?? "" : ""} /></label>
+          <PlayerContentFields initialTitles={initialTitles} initialNotes={initialNotes} />
           <button className="button primary" type="submit">Add Session</button>
         </form>
       </section>
