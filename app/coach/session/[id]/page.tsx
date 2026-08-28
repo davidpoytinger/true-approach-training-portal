@@ -177,6 +177,9 @@ export default async function CoachSessionPage({
               {videos.length ? videos.map((video, index) => (
                 <div className="videoEntry" key={video.VideoID}>
                   <div className="videoEntryHeader"><strong>Video {index + 1}</strong><span className="muted">{fileName(video.VideoFile)}</span></div>
+                  <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${video.VideoID}`}>
+                    Your browser does not support video playback.
+                  </video>
                   <div className="storedVideoBadge">Stored in Caspio</div>
                   <label>Video title<input name={`title_${video.PK_ID}`} type="text" defaultValue={video.Title} /></label>
                   <label>Video coach note<textarea name={`note_${video.PK_ID}`} rows={3} defaultValue={video.CoachNote ?? ""} /></label>
