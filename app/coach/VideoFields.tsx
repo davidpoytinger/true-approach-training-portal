@@ -22,6 +22,37 @@ function documentLabel(fileName?: string) {
   return extension && extension.length <= 5 ? extension : "DOC";
 }
 
+function renderJpeg(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
+  const maxWidth = 560;
+  const scale = Math.min(1, maxWidth / sourceWidth);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) return undefined;
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  const data = canvas.toDataURL("image/jpeg", 0.82);
+  return data.length <= 350000 ? data : canvas.toDataURL("image/jpeg", 0.68);
+}
+
+async function createImageThumbnail(file: File): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    const cleanup = () => URL.revokeObjectURL(url);
+    image.onload = () => {
+      const data = renderJpeg(image, image.naturalWidth || 1200, image.naturalHeight || 800);
+      cleanup();
+      resolve(data);
+    };
+    image.onerror = () => {
+      cleanup();
+      resolve(undefined);
+    };
+    image.src = url;
+  });
+}
+
 async function createVideoThumbnail(file: File): Promise<string | undefined> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -49,29 +80,7 @@ async function createVideoThumbnail(file: File): Promise<string | undefined> {
 
     video.onseeked = () => {
       try {
-        const sourceWidth = video.videoWidth || 1280;
-        const sourceHeight = video.videoHeight || 720;
-        const maxWidth = 560;
-        const scale = Math.min(1, maxWidth / sourceWidth);
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-        canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-        const context = canvas.getContext("2d");
-        if (!context) return fail();
-        context.imageSmoothingEnabled = true;
-        context.imageSmoothingQuality = "high";
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        const qualityLevels = [0.78, 0.7, 0.62, 0.54];
-        let data: string | undefined;
-        for (const quality of qualityLevels) {
-          const candidate = canvas.toDataURL("image/jpeg", quality);
-          if (candidate.length <= 160000) {
-            data = candidate;
-            break;
-          }
-        }
-
+        const data = renderJpeg(video, video.videoWidth || 1280, video.videoHeight || 720);
         cleanup();
         resolve(data);
       } catch { fail(); }
@@ -97,10 +106,11 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""] 
       return { ...item, previewUrl: URL.createObjectURL(file), fileName: file.name, fileType: file.type, emailThumbnailData: undefined };
     }));
 
-    if (file?.type.startsWith("video/")) {
-      const thumbnail = await createVideoThumbnail(file);
-      if (thumbnail) setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, emailThumbnailData: thumbnail } : item));
-    }
+    let thumbnail: string | undefined;
+    if (file?.type.startsWith("video/")) thumbnail = await createVideoThumbnail(file);
+    else if (file?.type.startsWith("image/")) thumbnail = await createImageThumbnail(file);
+
+    if (thumbnail) setContent((current) => current.map((item) => item.id === id && item.fileName === file?.name ? { ...item, emailThumbnailData: thumbnail } : item));
   }
 
   return (
