@@ -117,7 +117,7 @@ export default async function NewPlayerSessionPage({ searchParams }: { searchPar
         <form className="form" action={publishPlayerSession}>
           <input type="hidden" name="playerId" value={playerId} />
           <label>Session Date<input name="sessionDate" type="date" defaultValue={today} required /></label>
-          <label>Session Title<input name="title" type="text" defaultValue="Training Session" required /></label>
+          <label>Session Title<input name="title" type="text" defaultValue="Player Session" required /></label>
           <label>Session Notes<textarea name="sessionNotes" rows={5} placeholder="What did you work on? What felt good? What do you want your coach to look at?" /></label>
           <PlayerContentFields />
           <button className="button primary" type="submit">Add Session</button>
