@@ -120,7 +120,7 @@ export default async function CoachPlayerProfilePage({ params, searchParams }: {
       </header>
 
       <section className="card coachSection">
-        <PlayerIdentity playerId={playerId} firstName={player.FirstName} lastName={player.LastName} src={photoSrc} size={76} />
+        <PlayerIdentity playerId={playerId} firstName={player.FirstName} lastName={player.LastName} photoSrc={photoSrc} size={76} />
         {query.saved === "1" ? <p className="successBanner">Player profile updated successfully.</p> : null}
         {query.error ? <p className="errorBanner">{query.error === "missing" ? "First and last name are required." : query.error === "delete-confirm" ? "Please confirm that you want to delete this player." : query.error === "delete" ? "Unable to delete this player. Please try again." : "Unable to save this player. Please try again."}</p> : null}
 
