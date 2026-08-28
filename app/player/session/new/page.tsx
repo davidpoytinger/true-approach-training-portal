@@ -14,68 +14,16 @@ type PlayerResponse = { data: Player[] };
 type CreateSessionResponse = { data?: Array<{ SessionID?: number }>; SessionID?: number; PK_ID?: number };
 type UploadResponse = { data: Array<{ fullFilePath: string }> };
 
-type Params = {
-  playerId?: string;
-  error?: string;
-  sessionDate?: string;
-  title?: string;
-  sessionNotes?: string;
-  contentTitles?: string;
-  contentNotes?: string;
-};
+type Params = { playerId?: string; error?: string; sessionDate?: string; title?: string; sessionNotes?: string; contentTitles?: string; contentNotes?: string };
 
-async function getPlayer(playerId: number) {
-  const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=PlayerID=${playerId}&limit=1`);
-  return result.data?.[0] ?? null;
-}
-
-function uniqueFileName(originalName: string, index: number) {
-  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `${Date.now()}-${index + 1}-${safeName}`;
-}
-
-function parseArray(value?: string) {
-  if (!value) return [""];
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.length ? parsed.map((item) => String(item ?? "")) : [""];
-  } catch {
-    return [""];
-  }
-}
-
-function errorRedirect(values: {
-  playerId: number;
-  sessionDate: string;
-  title: string;
-  sessionNotes: string;
-  contentTitles: string[];
-  contentNotes: string[];
-}) {
-  const params = new URLSearchParams({
-    playerId: String(values.playerId),
-    error: "save-failed",
-    sessionDate: values.sessionDate,
-    title: values.title,
-    sessionNotes: values.sessionNotes,
-    contentTitles: JSON.stringify(values.contentTitles),
-    contentNotes: JSON.stringify(values.contentNotes)
-  });
-  redirect(`/player/session/new?${params.toString()}`);
-}
-
-async function uploadContent(file: File, index: number) {
-  const uploadForm = new FormData();
-  uploadForm.append("Files", file, uniqueFileName(file.name, index));
-  const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", { method: "POST", body: uploadForm });
-  const fullFilePath = uploaded.data?.[0]?.fullFilePath;
-  if (!fullFilePath) throw new Error("Stored file path was not returned");
-  return fullFilePath;
-}
+async function getPlayer(playerId: number) { const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=PlayerID=${playerId}&limit=1`); return result.data?.[0] ?? null; }
+function uniqueFileName(originalName: string, index: number) { const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_"); return `${Date.now()}-${index + 1}-${safeName}`; }
+function parseArray(value?: string) { if (!value) return [""]; try { const parsed = JSON.parse(value); return Array.isArray(parsed) && parsed.length ? parsed.map((item) => String(item ?? "")) : [""]; } catch { return [""]; } }
+function errorRedirect(values: { playerId: number; sessionDate: string; title: string; sessionNotes: string; contentTitles: string[]; contentNotes: string[] }) { const params = new URLSearchParams({ playerId: String(values.playerId), error: "save-failed", sessionDate: values.sessionDate, title: values.title, sessionNotes: values.sessionNotes, contentTitles: JSON.stringify(values.contentTitles), contentNotes: JSON.stringify(values.contentNotes) }); redirect(`/player/session/new?${params.toString()}`); }
+async function uploadContent(file: File, index: number) { const uploadForm = new FormData(); uploadForm.append("Files", file, uniqueFileName(file.name, index)); const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", { method: "POST", body: uploadForm }); const fullFilePath = uploaded.data?.[0]?.fullFilePath; if (!fullFilePath) throw new Error("Stored file path was not returned"); return fullFilePath; }
 
 async function publishPlayerSession(formData: FormData) {
   "use server";
-
   const playerId = Number(formData.get("playerId"));
   const sessionDate = String(formData.get("sessionDate") ?? "");
   const title = String(formData.get("title") ?? "").trim();
@@ -84,48 +32,25 @@ async function publishPlayerSession(formData: FormData) {
   const titles = formData.getAll("videoTitle").map((value) => String(value ?? "").trim());
   const notes = formData.getAll("videoNote").map((value) => String(value ?? "").trim());
   const files = rawFiles.filter((value): value is File => value instanceof File && value.size > 0);
-
-  if (!Number.isInteger(playerId) || playerId <= 0 || !sessionDate || !title) {
-    redirect(`/player/session/new?playerId=${playerId}&error=missing-fields`);
-  }
+  if (!Number.isInteger(playerId) || playerId <= 0 || !sessionDate || !title) redirect(`/player/session/new?playerId=${playerId}&error=missing-fields`);
 
   let sessionId: number | undefined;
-
   try {
     const created = await caspioFetch<CreateSessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?echo=true`, {
       method: "POST",
-      body: JSON.stringify({
-        PlayerID: playerId,
-        SessionDate: sessionDate,
-        Title: title,
-        CoachNotes: sessionNotes || null,
-        Status: "Player Submitted",
-        PublishedAt: new Date().toISOString()
-      })
+      body: JSON.stringify({ PlayerID: playerId, SessionDate: sessionDate, Title: title, CoachNotes: sessionNotes || null, Status: "Player Submitted", SessionSource: "Player", PublishedAt: new Date().toISOString() })
     });
-
     sessionId = created.data?.[0]?.SessionID ?? created.SessionID ?? created.PK_ID;
     if (!sessionId) throw new Error("Session ID was not returned");
-
     for (let index = 0; index < files.length; index += 1) {
       const sourceFile = files[index];
       const fullFilePath = await uploadContent(sourceFile, index);
-      await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records`, {
-        method: "POST",
-        body: JSON.stringify({
-          SessionID: sessionId,
-          VideoFile: fullFilePath,
-          Title: titles[index] || sourceFile.name,
-          CoachNote: notes[index] || null,
-          DisplayOrder: index + 1
-        })
-      });
+      await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records`, { method: "POST", body: JSON.stringify({ SessionID: sessionId, VideoFile: fullFilePath, Title: titles[index] || sourceFile.name, CoachNote: notes[index] || null, DisplayOrder: index + 1 }) });
     }
   } catch (error) {
     console.error("Player session publish failed", error);
     errorRedirect({ playerId, sessionDate, title, sessionNotes, contentTitles: titles, contentNotes: notes });
   }
-
   redirect(`/player/session/${sessionId}?playerId=${playerId}&created=1`);
 }
 
@@ -133,10 +58,8 @@ export default async function NewPlayerSessionPage({ searchParams }: { searchPar
   const params = await searchParams;
   const playerId = Number(params.playerId);
   if (!Number.isInteger(playerId) || playerId <= 0) notFound();
-
   const player = await getPlayer(playerId);
   if (!player || !player.IsActive) notFound();
-
   const today = new Date().toISOString().slice(0, 10);
   const retrying = params.error === "save-failed";
   const initialTitles = retrying ? parseArray(params.contentTitles) : [""];
@@ -144,19 +67,12 @@ export default async function NewPlayerSessionPage({ searchParams }: { searchPar
 
   return (
     <main className="shell">
-      <header className="topbar">
-        <div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Training Session</h1></div>
-        <Link href={`/player?playerId=${playerId}`} className="textLink">← Player Portal</Link>
-      </header>
-
+      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Training Session</h1></div><Link href={`/player?playerId=${playerId}`} className="textLink">← Player Portal</Link></header>
       <section className="card coachSection">
-        <div className="label">ADD YOUR SESSION</div>
-        <h2>{player.FirstName} {player.LastName}</h2>
+        <div className="label">ADD YOUR SESSION</div><h2>{player.FirstName} {player.LastName}</h2>
         <p className="muted">Upload videos or pictures from your own training so you and your coach can review them later.</p>
-
         {params.error === "missing-fields" ? <p className="errorBanner">Session date and title are required.</p> : null}
         {retrying ? <p className="errorBanner">Unable to save this session. Your text was preserved below. Please reselect your content files and try again.</p> : null}
-
         <form className="form" action={publishPlayerSession}>
           <input type="hidden" name="playerId" value={playerId} />
           <label>Session Date<input name="sessionDate" type="date" defaultValue={retrying ? params.sessionDate ?? today : today} required /></label>
