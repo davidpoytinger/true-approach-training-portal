@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const result = await caspioFetch<unknown>("/schemas");
+    const result = await caspioFetch<unknown>("/schemas/tables");
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown Caspio error";
