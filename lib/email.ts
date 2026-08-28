@@ -21,6 +21,14 @@ export function coachSessionUrl(sessionId: number) {
   return `${appUrl()}/coach/session/${sessionId}`;
 }
 
+export function contentFileUrl(videoId: number) {
+  return `${appUrl()}/api/video/${videoId}`;
+}
+
+export function contentThumbnailUrl(videoId: number) {
+  return `${appUrl()}/api/content-thumbnail/${videoId}`;
+}
+
 type TemplateVariables = Record<string, string | number>;
 
 async function sendTemplateEmail(to: string | string[], templateId: string, variables: TemplateVariables) {
@@ -67,13 +75,14 @@ export async function sendPasswordReset(args: { email: string; accountName: stri
   });
 }
 
-export async function sendSessionPublished(args: { email: string; accountName: string; playerName: string; sessionTitle: string; sessionDate: string; sessionId: number; playerId: number }) {
+export async function sendSessionPublished(args: { email: string; accountName: string; playerName: string; sessionTitle: string; sessionDate: string; sessionId: number; playerId: number; attachmentsHtml?: string }) {
   return sendTemplateEmail(args.email, "true-approach-session-published", {
     ACCOUNT_NAME: args.accountName,
     PLAYER_NAME: args.playerName,
     SESSION_TITLE: args.sessionTitle,
     SESSION_DATE: args.sessionDate,
-    SESSION_URL: playerSessionUrl(args.sessionId, args.playerId)
+    SESSION_URL: playerSessionUrl(args.sessionId, args.playerId),
+    ATTACHMENTS_HTML: args.attachmentsHtml ?? ""
   });
 }
 
