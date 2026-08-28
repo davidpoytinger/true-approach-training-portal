@@ -12,8 +12,8 @@ const SESSION_VIDEOS_TABLE_ID = "c7s9mf";
 type Player = { PlayerID: number; FirstName: string; LastName: string };
 type PlayerResponse = { data: Player[] };
 type TrainingSession = { PK_ID: number; SessionID: number; PlayerID: number; SessionDate: string; Title: string; CoachNotes?: string | null; Status: string };
-type SessionResponse = { data: TrainingSession[] };
 type SessionVideo = { PK_ID: number; VideoID: number; SessionID: number; VideoFile: string; Title: string; CoachNote?: string | null; DisplayOrder?: number | null };
+type SessionResponse = { data: TrainingSession[] };
 type VideoResponse = { data: SessionVideo[] };
 type UploadResponse = { data: Array<{ fullFilePath: string }> };
 
@@ -44,6 +44,7 @@ async function saveSession(sessionId: number, formData: FormData) {
 
 function dateInputValue(value: string) { return new Date(value).toISOString().slice(0, 10); }
 function fileName(path: string) { return decodeURIComponent(path.split("/").filter(Boolean).pop() ?? path); }
+function isImagePath(path: string) { return /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(fileName(path)); }
 
 export default async function CoachSessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ saved?: string; error?: string }> }) {
   const { id } = await params; const query = await searchParams; const sessionId = Number(id); if (!Number.isInteger(sessionId) || sessionId <= 0) notFound();
@@ -61,17 +62,21 @@ export default async function CoachSessionPage({ params, searchParams }: { param
           <label>Session Date<input name="sessionDate" type="date" defaultValue={dateInputValue(session.SessionDate)} required /></label>
           <label>Session Title<input name="title" type="text" defaultValue={session.Title} required /></label>
           <label>Overall Coach Notes<textarea name="coachNotes" rows={4} defaultValue={session.CoachNotes ?? ""} /></label>
-          <fieldset><legend>Current Videos</legend><div className="videoFields">
+          <fieldset><legend>Current Content</legend><div className="videoFields">
             {videos.length ? videos.map((video) => <div className="videoEntry" key={video.VideoID}>
               <div className="videoEntryHeader"><span className="muted">{fileName(video.VideoFile)}</span></div>
-              <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${video.VideoID}`}>Your browser does not support video playback.</video>
-              <label>Video Title<input name={`title_${video.PK_ID}`} type="text" defaultValue={video.Title} /></label>
-              <label>Video Coach Note<textarea name={`note_${video.PK_ID}`} rows={3} defaultValue={video.CoachNote ?? ""} /></label>
-              <label className="removeVideoCheck"><input name={`remove_${video.PK_ID}`} type="checkbox" value="1" /> Remove this video from the session</label>
-            </div>) : <p className="muted">This session does not have any videos.</p>}
+              {isImagePath(video.VideoFile) ? (
+                <img className="storedVideoPreview" src={`/api/video/${video.VideoID}`} alt={video.Title || fileName(video.VideoFile)} />
+              ) : (
+                <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${video.VideoID}`}>Your browser does not support video playback.</video>
+              )}
+              <label>Content Title<input name={`title_${video.PK_ID}`} type="text" defaultValue={video.Title} /></label>
+              <label>Content Coach Note<textarea name={`note_${video.PK_ID}`} rows={3} defaultValue={video.CoachNote ?? ""} /></label>
+              <label className="removeVideoCheck"><input name={`remove_${video.PK_ID}`} type="checkbox" value="1" /> Remove this content from the session</label>
+            </div>) : <p className="muted">This session does not have any content.</p>}
           </div></fieldset>
           <VideoFields />
-          <p className="muted">Use the section above only if you want to add new videos to this existing session.</p>
+          <p className="muted">Use the section above only if you want to add new content to this existing session.</p>
           <div className="actions"><button className="button primary" type="submit">Save Changes</button><Link className="button secondary" href="/coach">Cancel</Link></div>
         </form>
       </section>
