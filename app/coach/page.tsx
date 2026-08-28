@@ -12,10 +12,16 @@ type Player = { PlayerID: number; FirstName: string; LastName: string; IsActive:
 type PlayerResponse = { data: Player[] };
 type CreateSessionResponse = { data?: Array<{ SessionID?: number }>; PK_ID?: number; SessionID?: number };
 type UploadResponse = { data: Array<{ name: string; fileId: string; fullFilePath: string }> };
+type CoachParams = { saved?: string; error?: string; playerId?: string; sessionDate?: string; title?: string; coachNotes?: string; videoTitle?: string; videoNote?: string; video?: string };
 
 async function getPlayers(): Promise<Player[]> {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=IsActive=1&orderBy=LastName,FirstName&limit=200`);
   return result.data ?? [];
+}
+
+function errorRedirect(values: { playerId: number; sessionDate: string; title: string; coachNotes: string; videoTitle: string; videoNote: string }) {
+  const params = new URLSearchParams({ error: "save-failed", playerId: String(values.playerId), sessionDate: values.sessionDate, title: values.title, coachNotes: values.coachNotes, videoTitle: values.videoTitle, videoNote: values.videoNote });
+  redirect(`/coach?${params.toString()}`);
 }
 
 async function publishSession(formData: FormData) {
@@ -54,14 +60,14 @@ async function publishSession(formData: FormData) {
     }
   } catch (error) {
     console.error("Publish session failed", error);
-    redirect("/coach?error=save-failed");
+    errorRedirect({ playerId, sessionDate, title, coachNotes, videoTitle, videoNote });
   }
 
   const params = new URLSearchParams({ saved: "1", playerId: String(playerId), sessionDate, title, video: video instanceof File && video.size > 0 ? "1" : "0" });
   redirect(`/coach?${params.toString()}`);
 }
 
-export default async function CoachDashboard({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string; playerId?: string; sessionDate?: string; title?: string; video?: string }> }) {
+export default async function CoachDashboard({ searchParams }: { searchParams: Promise<CoachParams> }) {
   const params = await searchParams;
   let players: Player[] = [];
   let playerLoadError = false;
@@ -71,6 +77,7 @@ export default async function CoachDashboard({ searchParams }: { searchParams: P
   const savedPlayer = players.find((player) => String(player.PlayerID) === params.playerId);
   const savedPlayerName = savedPlayer ? `${savedPlayer.FirstName} ${savedPlayer.LastName}` : "Selected player";
   const savedDate = params.sessionDate ? new Date(`${params.sessionDate}T12:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+  const retrying = params.error === "save-failed";
 
   return (
     <main className="shell">
@@ -78,16 +85,16 @@ export default async function CoachDashboard({ searchParams }: { searchParams: P
       <section className="card"><div className="label">MVP COACH WORKFLOW</div><h2>Create a training session</h2>
         {params.saved === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>Session published successfully</strong><p>{params.title || "Training session"} for {savedPlayerName}{savedDate ? ` on ${savedDate}` : ""} was saved to Caspio.{params.video === "1" ? " The video was uploaded and linked to this session." : ""}</p><span>You can create another session below.</span></div></div> : null}
         {params.error === "missing-fields" ? <p className="errorBanner">Please select a player and enter a session date and title.</p> : null}
-        {params.error === "save-failed" ? <p className="errorBanner">Unable to save the session or video. Please try again.</p> : null}
+        {retrying ? <p className="errorBanner">Unable to save the session or video. Your form details were preserved below. Please reselect the video file and try again.</p> : null}
         <form className="form" action={publishSession}>
-          <label>Player<select name="playerId" defaultValue="" required><option value="" disabled>{playerLoadError ? "Unable to load players" : players.length ? "Select a player" : "No active players yet"}</option>{players.map((player) => <option key={player.PlayerID} value={player.PlayerID}>{player.FirstName} {player.LastName}</option>)}</select></label>
-          <label>Session date<input name="sessionDate" type="date" defaultValue={today} required /></label>
-          <label>Session title<input name="title" type="text" defaultValue="Hitting Session" required /></label>
-          <label>Overall coach notes<textarea name="coachNotes" rows={4} placeholder="What should the player focus on?" /></label>
+          <label>Player<select name="playerId" defaultValue={retrying ? params.playerId ?? "" : ""} required><option value="" disabled>{playerLoadError ? "Unable to load players" : players.length ? "Select a player" : "No active players yet"}</option>{players.map((player) => <option key={player.PlayerID} value={player.PlayerID}>{player.FirstName} {player.LastName}</option>)}</select></label>
+          <label>Session date<input name="sessionDate" type="date" defaultValue={retrying ? params.sessionDate ?? today : today} required /></label>
+          <label>Session title<input name="title" type="text" defaultValue={retrying ? params.title ?? "Hitting Session" : "Hitting Session"} required /></label>
+          <label>Overall coach notes<textarea name="coachNotes" rows={4} placeholder="What should the player focus on?" defaultValue={retrying ? params.coachNotes ?? "" : ""} /></label>
           <fieldset><legend>Video</legend><div className="uploadBox">
             <label>Video file<input name="video" type="file" accept="video/*" /></label>
-            <label>Video title<input name="videoTitle" type="text" placeholder="Example: Front View" /></label>
-            <label>Video coach note<textarea name="videoNote" rows={3} placeholder="Optional note for this video" /></label>
+            <label>Video title<input name="videoTitle" type="text" placeholder="Example: Front View" defaultValue={retrying ? params.videoTitle ?? "" : ""} /></label>
+            <label>Video coach note<textarea name="videoNote" rows={3} placeholder="Optional note for this video" defaultValue={retrying ? params.videoNote ?? "" : ""} /></label>
             <p className="muted">For this first test, upload one video. Once this works end to end, we’ll add multiple videos.</p>
           </div></fieldset>
           <button className="button primary" type="submit" disabled={!players.length || playerLoadError}>Publish Session</button>
