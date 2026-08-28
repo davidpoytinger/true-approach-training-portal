@@ -10,17 +10,19 @@ const logoUrl = "https://a6defeefbe5ec18834b4.cdn6.editmysite.com/uploads/b/a6de
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>
+      <body style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <div className="appBrandBar">
           <a className="appBrand" href="/">
             <img className="appBrandLogo" src={logoUrl} alt="True Approach Baseball" />
             <div className="appBrandText">
               <span className="appBrandName">True Approach Dugout</span>
-              <span className="appBrandCompany">True Approach Baseball</span>
             </div>
           </a>
         </div>
-        {children}
+        <div style={{ flex: 1 }}>{children}</div>
+        <footer style={{ borderTop: "1px solid #dedfe2", background: "#fff", padding: "28px 16px", textAlign: "center", color: "#6b7280", fontSize: ".88rem" }}>
+          © 2026 True Approach Baseball. All rights reserved.
+        </footer>
       </body>
     </html>
   );
