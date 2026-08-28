@@ -4,13 +4,28 @@ import { useEffect, useState } from "react";
 
 type ContentDraft = {
   id: number;
+  title: string;
+  note: string;
   previewUrl?: string;
   fileName?: string;
   fileType?: string;
 };
 
-export default function PlayerContentFields() {
-  const [content, setContent] = useState<ContentDraft[]>([{ id: 1 }]);
+export default function PlayerContentFields({
+  initialTitles = [""],
+  initialNotes = [""]
+}: {
+  initialTitles?: string[];
+  initialNotes?: string[];
+}) {
+  const initialCount = Math.max(1, initialTitles.length, initialNotes.length);
+  const [content, setContent] = useState<ContentDraft[]>(
+    Array.from({ length: initialCount }, (_, index) => ({
+      id: index + 1,
+      title: initialTitles[index] ?? "",
+      note: initialNotes[index] ?? ""
+    }))
+  );
 
   useEffect(() => () => {
     content.forEach((item) => {
@@ -19,7 +34,10 @@ export default function PlayerContentFields() {
   }, [content]);
 
   function addContent() {
-    setContent((current) => [...current, { id: Math.max(...current.map((item) => item.id), 0) + 1 }]);
+    setContent((current) => [
+      ...current,
+      { id: Math.max(...current.map((item) => item.id), 0) + 1, title: "", note: "" }
+    ]);
   }
 
   function removeContent(id: number) {
@@ -34,7 +52,7 @@ export default function PlayerContentFields() {
     setContent((current) => current.map((item) => {
       if (item.id !== id) return item;
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      if (!file) return { id: item.id };
+      if (!file) return { ...item, previewUrl: undefined, fileName: undefined, fileType: undefined };
       return { ...item, previewUrl: URL.createObjectURL(file), fileName: file.name, fileType: file.type };
     }));
   }
@@ -70,8 +88,8 @@ export default function PlayerContentFields() {
                 <span className="videoPreviewName">{item.fileName}</span>
               </div>
             ) : null}
-            <label>Content Title<input name="videoTitle" type="text" placeholder="Example: Front View" /></label>
-            <label>Your Note<textarea name="videoNote" rows={3} placeholder="Optional note about this content" /></label>
+            <label>Content Title<input name="videoTitle" type="text" placeholder="Example: Front View" defaultValue={item.title} /></label>
+            <label>Your Note<textarea name="videoNote" rows={3} placeholder="Optional note about this content" defaultValue={item.note} /></label>
           </div>
         ))}
       </div>
