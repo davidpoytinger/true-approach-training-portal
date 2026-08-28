@@ -12,6 +12,11 @@ function requiredEnv(name: string): string {
   return value;
 }
 
+function normalizeBaseUrl(value: string): string {
+  const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+  return withProtocol.replace(/\/$/, "");
+}
+
 export async function getCaspioAccessToken(): Promise<string> {
   const now = Date.now();
   if (cachedToken && cachedToken.expiresAt > now + 60_000) return cachedToken.token;
@@ -37,7 +42,7 @@ export async function getCaspioAccessToken(): Promise<string> {
 }
 
 export async function caspioFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const integrationUrl = requiredEnv("CASPIO_INTEGRATION_URL").replace(/\/$/, "");
+  const integrationUrl = normalizeBaseUrl(requiredEnv("CASPIO_INTEGRATION_URL"));
   const token = await getCaspioAccessToken();
 
   const response = await fetch(`${integrationUrl}/integrations/rest/v4${path}`, {
