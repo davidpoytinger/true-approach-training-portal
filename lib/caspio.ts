@@ -40,7 +40,7 @@ export async function caspioFetch<T>(path: string, init: RequestInit = {}): Prom
   const integrationUrl = requiredEnv("CASPIO_INTEGRATION_URL").replace(/\/$/, "");
   const token = await getCaspioAccessToken();
 
-  const response = await fetch(`${integrationUrl}/integrations/rest/v4${path}`, {
+  const response = await fetch(`${integrationUrl}/rest/v4${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,
