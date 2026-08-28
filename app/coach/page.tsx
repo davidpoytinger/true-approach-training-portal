@@ -62,13 +62,26 @@ async function publishSession(formData: FormData) {
     redirect("/coach?error=save-failed");
   }
 
-  redirect("/coach?saved=1");
+  const params = new URLSearchParams({
+    saved: "1",
+    playerId: String(playerId),
+    sessionDate,
+    title
+  });
+
+  redirect(`/coach?${params.toString()}`);
 }
 
 export default async function CoachDashboard({
   searchParams
 }: {
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{
+    saved?: string;
+    error?: string;
+    playerId?: string;
+    sessionDate?: string;
+    title?: string;
+  }>;
 }) {
   const params = await searchParams;
   let players: Player[] = [];
@@ -81,14 +94,32 @@ export default async function CoachDashboard({
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const savedPlayer = players.find((player) => String(player.PlayerID) === params.playerId);
+  const savedPlayerName = savedPlayer ? `${savedPlayer.FirstName} ${savedPlayer.LastName}` : "Selected player";
+  const savedDate = params.sessionDate
+    ? new Date(`${params.sessionDate}T12:00:00`).toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric"
+      })
+    : "";
 
   return (
     <main className="shell">
       <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Coach Portal</h1></div><Link href="/" className="textLink">Log out</Link></header>
       <section className="card"><div className="label">MVP COACH WORKFLOW</div><h2>Create a training session</h2>
-        {params.saved === "1" ? <p>Session published successfully.</p> : null}
-        {params.error === "missing-fields" ? <p>Please select a player and enter a session date and title.</p> : null}
-        {params.error === "save-failed" ? <p>Unable to save the session. Please try again.</p> : null}
+        {params.saved === "1" ? (
+          <div className="successBanner" role="status">
+            <div className="successIcon">✓</div>
+            <div>
+              <strong>Session published successfully</strong>
+              <p>{params.title || "Training session"} for {savedPlayerName}{savedDate ? ` on ${savedDate}` : ""} was saved to Caspio.</p>
+              <span>You can create another session below.</span>
+            </div>
+          </div>
+        ) : null}
+        {params.error === "missing-fields" ? <p className="errorBanner">Please select a player and enter a session date and title.</p> : null}
+        {params.error === "save-failed" ? <p className="errorBanner">Unable to save the session. Please try again.</p> : null}
         <form className="form" action={publishSession}>
           <label>Player
             <select name="playerId" defaultValue="" required>
