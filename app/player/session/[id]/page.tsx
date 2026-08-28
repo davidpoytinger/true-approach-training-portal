@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { caspioFetch } from "../../../../lib/caspio";
+import MediaPreview from "../../../MediaPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,6 @@ async function getSession(sessionId: number) { const result = await caspioFetch<
 async function getContent(sessionId: number) { const result = await caspioFetch<VideoResponse>(`/tables/${SESSION_VIDEOS_TABLE_ID}/records?select=VideoID,SessionID,VideoFile,Title,CoachNote,DisplayOrder&where=SessionID=${sessionId}&orderBy=DisplayOrder,VideoID&limit=200`); return result.data ?? []; }
 function dateValue(value: string) { return new Date(value).toISOString().slice(0, 10); }
 function fileName(path: string) { return decodeURIComponent(path.split("/").filter(Boolean).pop() ?? path); }
-function isImagePath(path: string) { return /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(fileName(path)); }
 function isDocumentPath(path: string) { return /\.(doc|docx|pdf|ppt|pptx|xls|xlsx)$/i.test(fileName(path)); }
 function documentLabel(path: string) { return fileName(path).split(".").pop()?.toUpperCase() || "DOC"; }
 function safeRichText(value?: string | null) { return (value ?? "").replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "").replace(/\son\w+="[^"]*"/gi, "").replace(/\son\w+='[^']*'/gi, "").replace(/javascript:/gi, ""); }
@@ -47,7 +47,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <label>Session Title<input type="text" value={session.Title} readOnly /></label>
           <div className="formField"><div className="formFieldLabel">{playerCreated ? "Your Session Notes" : "Overall Coach Notes"}</div><div className="readOnlyRichText" dangerouslySetInnerHTML={{ __html: safeRichText(session.CoachNotes) || "<span class='muted'>No notes for this session.</span>" }} /></div>
           <fieldset><legend>Content</legend><div className="videoFields">
-            {content.length ? content.map((item) => <div className="videoEntry" key={item.VideoID}>{isImagePath(item.VideoFile) ? <img className="storedVideoPreview" src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} /> : isDocumentPath(item.VideoFile) ? <a className="documentPreview storedDocument" href={`/api/video/${item.VideoID}`} target="_blank" rel="noreferrer"><div className="documentIcon">{documentLabel(item.VideoFile)}</div><span><strong>{item.Title || fileName(item.VideoFile)}</strong><small>{fileName(item.VideoFile)}</small></span></a> : <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${item.VideoID}`}>Your browser does not support video playback.</video>}<label>Content Title<input type="text" value={item.Title} readOnly /></label><label>{playerCreated ? "Your Note" : "Content Coach Note"}<textarea rows={3} value={item.CoachNote ?? ""} readOnly /></label></div>) : <p className="muted">This session does not have any content.</p>}
+            {content.length ? content.map((item) => <div className="videoEntry" key={item.VideoID}>{isDocumentPath(item.VideoFile) ? <a className="documentPreview storedDocument" href={`/api/video/${item.VideoID}`} target="_blank" rel="noreferrer"><div className="documentIcon">{documentLabel(item.VideoFile)}</div><span><strong>{item.Title || fileName(item.VideoFile)}</strong><small>{fileName(item.VideoFile)}</small></span></a> : <MediaPreview src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} />}<label>Content Title<input type="text" value={item.Title} readOnly /></label><label>{playerCreated ? "Your Note" : "Content Coach Note"}<textarea rows={3} value={item.CoachNote ?? ""} readOnly /></label></div>) : <p className="muted">This session does not have any content.</p>}
           </div></fieldset>
         </div>
       </section>
