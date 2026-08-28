@@ -10,7 +10,7 @@ type Player = { PlayerID: number; FirstName: string; LastName: string; Email?: s
 type PlayerResponse = { data: Player[] };
 type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; Status: string };
 type SessionResponse = { data: TrainingSession[] };
-type Params = { q?: string; created?: string; playerId?: string; parent?: string; invite?: string };
+type Params = { q?: string; created?: string; playerId?: string; parent?: string; invite?: string; emailed?: string };
 
 async function getPlayers(): Promise<Player[]> {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,Email,IsActive&orderBy=LastName,FirstName&limit=500`);
@@ -51,9 +51,9 @@ export default async function PlayerSearchPage({ searchParams }: { searchParams:
 
       {params.created === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>{createdPlayer ? `${createdPlayer.FirstName} ${createdPlayer.LastName} created successfully` : "Player created successfully"}</strong><p>{params.parent ? `Primary family access was connected to ${params.parent}.` : "The player is ready for training sessions."}</p></div></div> : null}
 
-      {params.created === "1" && params.invite ? <section className="card coachSection"><div className="label">PARENT INVITATION</div><h2>Send the Parent Their Login Invitation</h2><p className="muted">Email delivery is not connected yet, so copy this link and send it to {params.parent || "the parent"}. It expires in 7 days.</p><input readOnly value={inviteUrl}/><div className="actions" style={{marginTop:16}}>{createdPlayer ? <Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link> : null}</div></section> : null}
+      {params.created === "1" && params.invite ? <section className="card coachSection"><div className="label">PARENT INVITATION</div><h2>{params.emailed === "1" ? "Invitation Email Created" : "Parent Invitation"}</h2><p className="muted">{params.emailed === "1" ? `True Approach Dugout sent the account invitation to ${params.parent || "the parent"}. The link expires in 7 days.` : `The invitation is ready for ${params.parent || "the parent"}. The link expires in 7 days.`}</p><details><summary className="textLink">Show invitation link</summary><input readOnly value={inviteUrl}/></details><div className="actions" style={{marginTop:16}}>{createdPlayer ? <Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link> : null}</div></section> : null}
 
-      {params.created === "1" && !params.invite && createdPlayer ? <section className="card coachSection"><div className="label">FAMILY ACCESS</div><h2>Existing Parent Account Linked</h2><p className="muted">The parent already had a True Approach account, so no invitation is needed.</p><Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link></section> : null}
+      {params.created === "1" && !params.invite && createdPlayer ? <section className="card coachSection"><div className="label">FAMILY ACCESS</div><h2>Existing Parent Account Linked</h2><p className="muted">The parent already had a True Approach Dugout account, so no invitation is needed.</p><Link className="button primary" href={`/coach/session/new?playerId=${createdPlayer.PlayerID}`}>Add First Session</Link></section> : null}
 
       <section className="card coachSection">
         <div className="sectionHeadingRow"><div><div className="label">PLAYER DIRECTORY</div><h2>Search existing players</h2></div><Link href="/coach/players/new" className="button secondary">+ New Player</Link></div>
