@@ -29,7 +29,14 @@ function fallbackContentType(name: string) {
     mov: "video/quicktime",
     mp4: "video/mp4",
     m4v: "video/x-m4v",
-    webm: "video/webm"
+    webm: "video/webm",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   };
   return extension ? types[extension] ?? "application/octet-stream" : "application/octet-stream";
 }
@@ -116,7 +123,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       const value = caspioResponse.headers.get(key);
       if (value) headers.set(key, value);
     }
-    if (!headers.has("content-type")) headers.set("content-type", fallbackContentType(name));
+
+    const inferredType = fallbackContentType(name);
+    const caspioType = headers.get("content-type")?.toLowerCase() ?? "";
+    if (!caspioType || caspioType === "application/octet-stream" || caspioType === "binary/octet-stream") {
+      headers.set("content-type", inferredType);
+    }
+
     headers.set("accept-ranges", "bytes");
     headers.set("cache-control", "private, max-age=300");
 
