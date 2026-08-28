@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { caspioFetch } from "../../../../../lib/caspio";
 import PlayerContentFields from "../../../PlayerContentFields";
+import MediaPreview from "../../../../MediaPreview";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,6 @@ async function savePlayerSession(sessionId: number, formData: FormData) {
 
 function dateValue(value: string) { return new Date(value).toISOString().slice(0, 10); }
 function fileName(path: string) { return decodeURIComponent(path.split("/").filter(Boolean).pop() ?? path); }
-function isImagePath(path: string) { return /\.(avif|bmp|gif|heic|heif|jpe?g|png|webp)$/i.test(fileName(path)); }
 
 export default async function EditPlayerSessionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ playerId?: string; error?: string }> }) {
   const { id } = await params;
@@ -84,7 +84,7 @@ export default async function EditPlayerSessionPage({ params, searchParams }: { 
           <label>Session Title<input name="title" type="text" defaultValue={session.Title} required /></label>
           <label>Session Notes<textarea name="sessionNotes" rows={5} defaultValue={session.CoachNotes ?? ""} /></label>
           <fieldset><legend>Current Content</legend><div className="videoFields">
-            {content.length ? content.map((item) => <div className="videoEntry" key={item.VideoID}><div className="videoEntryHeader"><span className="muted">{fileName(item.VideoFile)}</span></div>{isImagePath(item.VideoFile) ? <img className="storedVideoPreview" src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} /> : <video className="storedVideoPreview" controls preload="metadata" src={`/api/video/${item.VideoID}`}>Your browser does not support video playback.</video>}<label>Content Title<input name={`title_${item.PK_ID}`} type="text" defaultValue={item.Title} /></label><label>Your Note<textarea name={`note_${item.PK_ID}`} rows={3} defaultValue={item.CoachNote ?? ""} /></label><label className="removeVideoCheck"><input name={`remove_${item.PK_ID}`} type="checkbox" value="1" /> Remove this content from the session</label></div>) : <p className="muted">This session does not have any content.</p>}
+            {content.length ? content.map((item) => <div className="videoEntry" key={item.VideoID}><div className="videoEntryHeader"><span className="muted">{fileName(item.VideoFile)}</span></div><MediaPreview src={`/api/video/${item.VideoID}`} alt={item.Title || fileName(item.VideoFile)} /><label>Content Title<input name={`title_${item.PK_ID}`} type="text" defaultValue={item.Title} /></label><label>Your Note<textarea name={`note_${item.PK_ID}`} rows={3} defaultValue={item.CoachNote ?? ""} /></label><label className="removeVideoCheck"><input name={`remove_${item.PK_ID}`} type="checkbox" value="1" /> Remove this content from the session</label></div>) : <p className="muted">This session does not have any content.</p>}
           </div></fieldset>
           <PlayerContentFields />
           <p className="muted">Use the section above only if you want to add more videos or pictures.</p>
