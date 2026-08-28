@@ -60,6 +60,23 @@ function errorRedirect(values: {
   redirect(`/coach?${params.toString()}`);
 }
 
+function uniqueFileName(originalName: string, index: number): string {
+  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `${Date.now()}-${index + 1}-${safeName}`;
+}
+
+async function uploadVideo(video: File, index: number): Promise<string> {
+  const uploadForm = new FormData();
+  uploadForm.append("Files", video, uniqueFileName(video.name, index));
+  const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", {
+    method: "POST",
+    body: uploadForm
+  });
+  const fullFilePath = uploaded.data?.[0]?.fullFilePath;
+  if (!fullFilePath) throw new Error(`Caspio did not return a file path for video ${index + 1}`);
+  return fullFilePath;
+}
+
 async function publishSession(formData: FormData) {
   "use server";
 
@@ -77,21 +94,6 @@ async function publishSession(formData: FormData) {
   }
 
   try {
-    let uploadedFiles: UploadResponse["data"] = [];
-
-    if (videos.length) {
-      const uploadForm = new FormData();
-      videos.forEach((video) => uploadForm.append("Files", video, video.name));
-      const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", {
-        method: "POST",
-        body: uploadForm
-      });
-      uploadedFiles = uploaded.data ?? [];
-      if (uploadedFiles.length !== videos.length || uploadedFiles.some((file) => !file.fullFilePath)) {
-        throw new Error("Caspio did not return all uploaded file paths");
-      }
-    }
-
     const created = await caspioFetch<CreateSessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?echo=true`, {
       method: "POST",
       body: JSON.stringify({
@@ -107,14 +109,15 @@ async function publishSession(formData: FormData) {
     const sessionId = created.data?.[0]?.SessionID ?? created.SessionID ?? created.PK_ID;
     if (!sessionId) throw new Error("Caspio did not return the new SessionID");
 
-    for (let index = 0; index < uploadedFiles.length; index += 1) {
-      const uploadedFile = uploadedFiles[index];
+    for (let index = 0; index < videos.length; index += 1) {
       const sourceVideo = videos[index];
+      const fullFilePath = await uploadVideo(sourceVideo, index);
+
       await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records`, {
         method: "POST",
         body: JSON.stringify({
           SessionID: sessionId,
-          VideoFile: uploadedFile.fullFilePath,
+          VideoFile: fullFilePath,
           Title: videoTitles[index] || sourceVideo.name,
           CoachNote: videoNotes[index] || null,
           DisplayOrder: index + 1
