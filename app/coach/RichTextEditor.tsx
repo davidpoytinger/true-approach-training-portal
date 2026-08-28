@@ -9,6 +9,24 @@ function stripUnsafeHtml(value: string) {
     .replace(/\son\w+='[^']*'/gi, "");
 }
 
+const buttonStyle = {
+  appearance: "none" as const,
+  border: "1px solid #d1d5db",
+  borderRadius: 7,
+  background: "#ffffff",
+  color: "#17191c",
+  cursor: "pointer",
+  minWidth: 34,
+  height: 32,
+  padding: "0 10px",
+  fontFamily: "Arial, Helvetica, sans-serif",
+  fontSize: 14,
+  fontWeight: 700,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center"
+};
+
 export default function RichTextEditor({ name, initialValue = "", placeholder = "" }: { name: string; initialValue?: string; placeholder?: string }) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [value, setValue] = useState(initialValue);
@@ -30,17 +48,39 @@ export default function RichTextEditor({ name, initialValue = "", placeholder = 
   }
 
   return (
-    <div className="richTextField">
-      <div className="richTextToolbar" role="toolbar" aria-label="Formatting options">
-        <button type="button" onClick={() => command("bold")} aria-label="Bold"><strong>B</strong></button>
-        <button type="button" onClick={() => command("italic")} aria-label="Italic"><em>I</em></button>
-        <button type="button" onClick={() => command("underline")} aria-label="Underline"><span className="underlineTool">U</span></button>
-        <span className="toolbarDivider" />
-        <button type="button" onClick={() => command("insertUnorderedList")} aria-label="Bulleted list">• List</button>
-        <button type="button" onClick={() => command("insertOrderedList")} aria-label="Numbered list">1. List</button>
-        <span className="toolbarDivider" />
-        <button type="button" onClick={addLink} aria-label="Add link">Link</button>
-        <button type="button" onClick={() => command("removeFormat")} aria-label="Clear formatting">Clear</button>
+    <div
+      className="richTextField"
+      style={{
+        width: "100%",
+        border: "1px solid #cfd2d6",
+        borderRadius: 9,
+        background: "#fff",
+        overflow: "hidden"
+      }}
+    >
+      <div
+        className="richTextToolbar"
+        role="toolbar"
+        aria-label="Formatting options"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          flexWrap: "wrap",
+          padding: 8,
+          borderBottom: "1px solid #d9dce0",
+          background: "#f7f7f8"
+        }}
+      >
+        <button style={buttonStyle} type="button" onClick={() => command("bold")} aria-label="Bold" title="Bold"><strong>B</strong></button>
+        <button style={buttonStyle} type="button" onClick={() => command("italic")} aria-label="Italic" title="Italic"><em>I</em></button>
+        <button style={buttonStyle} type="button" onClick={() => command("underline")} aria-label="Underline" title="Underline"><span style={{ textDecoration: "underline" }}>U</span></button>
+        <span style={{ width: 1, height: 24, background: "#d2d4d7", margin: "0 2px" }} />
+        <button style={buttonStyle} type="button" onClick={() => command("insertUnorderedList")} aria-label="Bulleted list" title="Bulleted List">• List</button>
+        <button style={buttonStyle} type="button" onClick={() => command("insertOrderedList")} aria-label="Numbered list" title="Numbered List">1. List</button>
+        <span style={{ width: 1, height: 24, background: "#d2d4d7", margin: "0 2px" }} />
+        <button style={buttonStyle} type="button" onClick={addLink} aria-label="Add link" title="Add Link">🔗 Link</button>
+        <button style={{ ...buttonStyle, fontWeight: 600 }} type="button" onClick={() => command("removeFormat")} aria-label="Clear formatting" title="Clear Formatting">Clear</button>
       </div>
       <div
         ref={editorRef}
@@ -51,6 +91,17 @@ export default function RichTextEditor({ name, initialValue = "", placeholder = 
         dangerouslySetInnerHTML={{ __html: initialValue }}
         onInput={sync}
         onBlur={sync}
+        style={{
+          width: "100%",
+          minHeight: 170,
+          padding: "14px 12px",
+          outline: "none",
+          fontFamily: "Arial, Helvetica, sans-serif",
+          fontSize: 16,
+          fontWeight: 400,
+          lineHeight: 1.5,
+          background: "#fff"
+        }}
       />
       <input type="hidden" name={name} value={value} />
     </div>
