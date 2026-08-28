@@ -68,16 +68,16 @@ export default function VideoFields({
     <fieldset>
       <legend>Videos</legend>
       <div className="videoFields">
-        {videos.map((video, index) => (
+        {videos.map((video) => (
           <div className="videoEntry" key={video.id}>
-            <div className="videoEntryHeader">
-              <strong>Video {index + 1}</strong>
-              {videos.length > 1 ? (
+            {videos.length > 1 ? (
+              <div className="videoEntryHeader">
+                <span />
                 <button className="textButton" type="button" onClick={() => removeVideo(video.id)}>
                   Remove
                 </button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
             <label>
               Video file
               <input
