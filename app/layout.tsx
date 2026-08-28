@@ -11,7 +11,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <div className="appBrandBar">
           <a className="appBrand" href="/">
-            <img className="appBrandLogo" src="/api/email-logo?v=2" alt="True Approach Baseball" />
+            <img className="appBrandLogo" src="/true-approach-logo.png" alt="True Approach Baseball" />
             <div className="appBrandText">
               <span className="appBrandName">True Approach Dugout</span>
               <span className="appBrandCompany">True Approach Baseball</span>
