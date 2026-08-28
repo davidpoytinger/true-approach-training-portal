@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { caspioFetch } from "../../../../lib/caspio";
 import { PLAYER_ACCESS_TABLE_ID, getAccount } from "../../../../lib/player-auth";
-import { contentFileUrl, contentThumbnailUrl, playerSessionUrl, sendSessionPublished } from "../../../../lib/email";
+import { contentThumbnailUrl, playerSessionUrl, sendSessionPublished } from "../../../../lib/email";
 import VideoFields from "../../VideoFields";
 import RichTextEditor from "../../RichTextEditor";
 
@@ -100,7 +100,7 @@ function buildAttachmentsHtml(content: SessionContent[], sessionId: number, play
     if (kind === "document") {
       return `<tr><td style="padding-top:8px;padding-right:0;padding-bottom:8px;padding-left:0;"><a href="${sessionUrl}" style="text-decoration:none;"><table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr><td width="62" align="center" valign="middle" bgcolor="#f0eee8" style="width:62px;height:58px;background-color:#f0eee8;border:1px solid #dedbd4;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;color:#173f31;font-weight:bold;">${documentLabel(item.VideoFile)}</td><td valign="middle" style="padding-left:14px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#222222;font-weight:bold;">${title}</td></tr></table></a></td></tr>`;
     }
-    const previewUrl = kind === "video" ? contentThumbnailUrl(item.VideoID) : contentFileUrl(item.VideoID);
+    const previewUrl = contentThumbnailUrl(item.VideoID);
     const alt = kind === "video" ? `Video preview: ${title}` : `Image preview: ${title}`;
     return `<tr><td style="padding-top:8px;padding-right:0;padding-bottom:10px;padding-left:0;"><a href="${sessionUrl}" style="text-decoration:none;"><img src="${previewUrl}" width="516" height="290" border="0" alt="${escapeHtml(alt)}" style="width:100%;max-width:516px;height:auto;display:block;border:0;border-radius:8px;"><p style="margin-top:7px;margin-bottom:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#222222;font-weight:bold;">${kind === "video" ? "▶ " : ""}${title}</p></a></td></tr>`;
   }).join("");
