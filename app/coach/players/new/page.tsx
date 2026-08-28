@@ -37,6 +37,9 @@ async function createPlayer(formData: FormData) {
 
   if (!firstName || !lastName || !parentFirstName || !parentLastName || !parentEmail) fail("missing-fields");
 
+  let playerId = 0;
+  let inviteToken = "";
+
   try {
     const createdPlayer = await caspioFetch<CreatePlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?echo=true`, {
       method: "POST",
@@ -55,7 +58,7 @@ async function createPlayer(formData: FormData) {
       })
     });
 
-    const playerId = Number(
+    playerId = Number(
       createdPlayer.data?.[0]?.PlayerID ??
       createdPlayer.data?.[0]?.PK_ID ??
       createdPlayer.PlayerID ??
@@ -65,7 +68,6 @@ async function createPlayer(formData: FormData) {
 
     const existingAccount = await findAccountByEmail(parentEmail);
     let accountId = existingAccount?.AccountID;
-    let inviteToken = "";
 
     if (!accountId) {
       inviteToken = randomBytes(32).toString("hex");
@@ -128,14 +130,14 @@ async function createPlayer(formData: FormData) {
         console.error("Parent invitation email failed", emailError);
       }
     }
-
-    const invitePart = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
-    const emailPart = inviteToken ? "&emailed=1" : "";
-    redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(parentEmail)}${invitePart}${emailPart}`);
   } catch (error) {
     console.error("Create player and parent failed", error);
     fail("save-failed");
   }
+
+  const invitePart = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
+  const emailPart = inviteToken ? "&emailed=1" : "";
+  redirect(`/coach/players?created=1&playerId=${playerId}&parent=${encodeURIComponent(parentEmail)}${invitePart}${emailPart}`);
 }
 
 export default async function NewPlayerPage({ searchParams }: { searchParams: Promise<Params> }) {
