@@ -8,7 +8,7 @@ const SESSIONS_TABLE_ID = "o1u972";
 
 type Player = { PlayerID: number; FirstName: string; LastName: string; Email?: string | null; IsActive: boolean };
 type PlayerResponse = { data: Player[] };
-type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; Status: string };
+type TrainingSession = { SessionID: number; PlayerID: number; SessionDate: string; Title: string; Status: string; SessionSource?: string | null };
 type SessionResponse = { data: TrainingSession[] };
 type Params = { q?: string; created?: string; playerId?: string; parent?: string; invite?: string; emailed?: string; deleted?: string };
 
@@ -18,12 +18,16 @@ async function getPlayers(): Promise<Player[]> {
 }
 
 async function getSessions(): Promise<TrainingSession[]> {
-  const result = await caspioFetch<SessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?select=SessionID,PlayerID,SessionDate,Title,Status&orderBy=SessionDate DESC,SessionID DESC&limit=500`);
+  const result = await caspioFetch<SessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?select=SessionID,PlayerID,SessionDate,Title,Status,SessionSource&orderBy=SessionDate DESC,SessionID DESC&limit=500`);
   return result.data ?? [];
 }
 
 function displayDate(value: string) {
   return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function sessionSourceLabel(session: TrainingSession) {
+  return session.SessionSource === "Player" ? "Player Added" : "Coach Added";
 }
 
 export default async function PlayerSearchPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -75,7 +79,7 @@ export default async function PlayerSearchPage({ searchParams }: { searchParams:
                   <div className="actions"><Link className="button secondary" href={`/coach/players/${player.PlayerID}`}>Edit Player</Link><Link className="button primary" href={`/coach/session/new?playerId=${player.PlayerID}`}>Add Session</Link></div>
                 </div>
                 <div className="playerSessionSummary"><strong>{playerSessions.length} training session{playerSessions.length === 1 ? "" : "s"}</strong></div>
-                {playerSessions.length ? <div className="miniSessionList">{playerSessions.slice(0, 4).map((session) => <Link href={`/coach/session/${session.SessionID}`} key={session.SessionID}><span>{session.Title}</span><span>{displayDate(session.SessionDate)} →</span></Link>)}</div> : <p className="muted">No sessions yet.</p>}
+                {playerSessions.length ? <div className="miniSessionList">{playerSessions.slice(0, 4).map((session) => <Link href={`/coach/session/${session.SessionID}`} key={session.SessionID}><span><strong>{session.Title}</strong><small className="muted" style={{display:"block",marginTop:3}}>{sessionSourceLabel(session)}</small></span><span>{displayDate(session.SessionDate)} →</span></Link>)}</div> : <p className="muted">No sessions yet.</p>}
               </article>
             );
           })}
