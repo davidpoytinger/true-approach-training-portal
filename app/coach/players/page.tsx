@@ -47,7 +47,7 @@ export default async function PlayerSearchPage({ searchParams }: { searchParams:
 
   return (
     <main className="shell">
-      <header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>Players</h1></div><Link href="/coach" className="textLink">← Coach Home</Link></header>
+      <header className="topbar"><div><h1>Players</h1></div><Link href="/coach" className="textLink">← Coach Home</Link></header>
 
       {params.deleted === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>Player deleted</strong><p>The player was removed from the active portal. Existing session history was preserved.</p></div></div> : null}
 
