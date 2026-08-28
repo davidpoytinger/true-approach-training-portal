@@ -51,17 +51,29 @@ async function createVideoThumbnail(file: File): Promise<string | undefined> {
       try {
         const sourceWidth = video.videoWidth || 1280;
         const sourceHeight = video.videoHeight || 720;
-        const maxWidth = 240;
+        const maxWidth = 560;
         const scale = Math.min(1, maxWidth / sourceWidth);
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(sourceWidth * scale));
         canvas.height = Math.max(1, Math.round(sourceHeight * scale));
         const context = canvas.getContext("2d");
         if (!context) return fail();
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = "high";
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const data = canvas.toDataURL("image/jpeg", 0.55);
+
+        const qualityLevels = [0.78, 0.7, 0.62, 0.54];
+        let data: string | undefined;
+        for (const quality of qualityLevels) {
+          const candidate = canvas.toDataURL("image/jpeg", quality);
+          if (candidate.length <= 160000) {
+            data = candidate;
+            break;
+          }
+        }
+
         cleanup();
-        resolve(data.length <= 80000 ? data : undefined);
+        resolve(data);
       } catch { fail(); }
     };
 
