@@ -6,6 +6,7 @@ import { ACCOUNTS_TABLE_ID, PLAYER_ACCESS_TABLE_ID, PLAYERS_TABLE_ID, findAccoun
 import { sendParentInvitation } from "../../../../lib/email";
 import { createSignedPlayerPhotoUrl } from "../../../../lib/player-photo-url";
 import PlayerIdentity from "../../../PlayerIdentity";
+import ParentAccountSelector from "../new/ParentAccountSelector";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +35,27 @@ type AccessRow = {
 };
 type AccessResponse = { data: AccessRow[] };
 type CreateAccountResponse = { data?: Array<{ AccountID?: number; PK_ID?: number }>; AccountID?: number; PK_ID?: number };
+type Account = { AccountID: number; FirstName: string; LastName: string; Email: string; Phone?: string | null; IsActive?: boolean | number | null };
+type AccountResponse = { data?: Account[] };
 type Params = { saved?: string; error?: string; parentAdded?: string; resent?: string; removed?: string };
 
 async function getPlayer(playerId: number) {
   const result = await caspioFetch<PlayerResponse>(
     `/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,DateOfBirth,Team,PrimaryPosition,Bats,Throws,GraduationYear,PlayerEmail,Phone,IsActive&where=PlayerID=${playerId}&limit=1`
+  );
+  return result.data?.[0] ?? null;
+}
+
+async function getAccounts(): Promise<Account[]> {
+  const result = await caspioFetch<AccountResponse>(
+    `/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,IsActive&where=IsActive=1&orderBy=LastName,FirstName&limit=500`
+  );
+  return result.data ?? [];
+}
+
+async function getAccountById(accountId: number): Promise<Account | null> {
+  const result = await caspioFetch<AccountResponse>(
+    `/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,IsActive&where=AccountID=${accountId}&limit=1`
   );
   return result.data?.[0] ?? null;
 }
@@ -90,50 +107,70 @@ async function savePlayer(formData: FormData) {
 async function addFamilyAccess(formData: FormData) {
   "use server";
   const playerId = Number(formData.get("playerId"));
-  const firstName = String(formData.get("firstName") ?? "").trim();
-  const lastName = String(formData.get("lastName") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const existingAccountId = Number(formData.get("existingAccountId")) || 0;
+  const firstName = String(formData.get("parentFirstName") ?? "").trim();
+  const lastName = String(formData.get("parentLastName") ?? "").trim();
+  const email = String(formData.get("parentEmail") ?? "").trim().toLowerCase();
+  const phone = String(formData.get("parentPhone") ?? "").trim();
   const relationship = String(formData.get("relationship") ?? "Parent").trim() || "Parent";
-  if (!Number.isInteger(playerId) || playerId <= 0 || !firstName || !lastName || !email) {
+
+  if (!Number.isInteger(playerId) || playerId <= 0 || (!existingAccountId && (!firstName || !lastName || !email))) {
     redirect(`/coach/players/${playerId}?error=family-missing`);
   }
 
   const player = await getPlayer(playerId);
   if (!player) redirect(`/coach/players/${playerId}?error=family-save`);
 
+  let linkedEmail = email;
+  let linkedFirstName = firstName;
+
   try {
-    const existingAccount = await findAccountByEmail(email);
-    let accountId: number | undefined = existingAccount?.AccountID;
+    let accountId = existingAccountId || 0;
     let inviteToken = "";
 
-    if (!accountId) {
-      inviteToken = randomBytes(32).toString("hex");
-      const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
-      const created = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
-        method: "POST",
-        body: JSON.stringify({
-          FirstName: firstName,
-          LastName: lastName,
-          Email: email,
-          IsActive: true,
-          EmailVerified: false,
-          EmailVerificationTokenHash: tokenHash,
-          EmailVerificationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-          CreatedAt: new Date().toISOString(),
-          UpdatedAt: new Date().toISOString()
-        })
-      });
-      accountId = created.data?.[0]?.AccountID ?? created.data?.[0]?.PK_ID ?? created.AccountID ?? created.PK_ID;
-      if (!accountId) accountId = (await findAccountByEmail(email))?.AccountID;
+    if (accountId) {
+      const selectedAccount = await getAccountById(accountId);
+      if (!selectedAccount || selectedAccount.IsActive === false || selectedAccount.IsActive === 0) {
+        redirect(`/coach/players/${playerId}?error=family-save`);
+      }
+      linkedEmail = selectedAccount.Email;
+      linkedFirstName = selectedAccount.FirstName;
+    } else {
+      const existingAccount = await findAccountByEmail(email);
+      accountId = existingAccount?.AccountID ?? 0;
+
+      if (!accountId) {
+        inviteToken = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(inviteToken).digest("hex");
+        const created = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
+          method: "POST",
+          body: JSON.stringify({
+            FirstName: firstName,
+            LastName: lastName,
+            Email: email,
+            Phone: phone || null,
+            IsActive: true,
+            EmailVerified: false,
+            EmailVerificationTokenHash: tokenHash,
+            EmailVerificationExpires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            CreatedAt: new Date().toISOString(),
+            UpdatedAt: new Date().toISOString()
+          })
+        });
+        accountId = Number(created.data?.[0]?.AccountID ?? created.data?.[0]?.PK_ID ?? created.AccountID ?? created.PK_ID);
+        if (!Number.isInteger(accountId) || accountId <= 0) accountId = (await findAccountByEmail(email))?.AccountID ?? 0;
+      } else if (existingAccount) {
+        linkedEmail = existingAccount.Email;
+        linkedFirstName = existingAccount.FirstName;
+      }
     }
 
-    const linkedAccountId = Number(accountId);
-    if (!Number.isInteger(linkedAccountId) || linkedAccountId <= 0) {
+    if (!Number.isInteger(accountId) || accountId <= 0) {
       redirect(`/coach/players/${playerId}?error=family-save`);
     }
 
     const existingAccess = (await caspioFetch<AccessResponse>(
-      `/tables/${PLAYER_ACCESS_TABLE_ID}/records?select=AccessID,PlayerID,AccountID,IsActive&where=PlayerID=${playerId}%20AND%20AccountID=${linkedAccountId}&limit=1`
+      `/tables/${PLAYER_ACCESS_TABLE_ID}/records?select=AccessID,PlayerID,AccountID,IsActive&where=PlayerID=${playerId}%20AND%20AccountID=${accountId}&limit=1`
     )).data?.[0];
 
     if (existingAccess) {
@@ -153,7 +190,7 @@ async function addFamilyAccess(formData: FormData) {
         method: "POST",
         body: JSON.stringify({
           PlayerID: playerId,
-          AccountID: linkedAccountId,
+          AccountID: accountId,
           Relationship: relationship,
           AccessLevel: "Full",
           IsPrimary: false,
@@ -170,14 +207,14 @@ async function addFamilyAccess(formData: FormData) {
     if (inviteToken) {
       try {
         await sendParentInvitation({
-          email,
-          parentName: firstName || "Parent",
+          email: linkedEmail,
+          parentName: linkedFirstName || "Parent",
           playerName: `${player.FirstName} ${player.LastName}`,
           token: inviteToken
         });
       } catch (emailError) {
         console.error("Coach family invitation email failed", emailError);
-        redirect(`/coach/players/${playerId}?parentAdded=${encodeURIComponent(email)}&error=family-email`);
+        redirect(`/coach/players/${playerId}?parentAdded=${encodeURIComponent(linkedEmail)}&error=family-email`);
       }
     }
   } catch (error) {
@@ -185,7 +222,7 @@ async function addFamilyAccess(formData: FormData) {
     redirect(`/coach/players/${playerId}?error=family-save`);
   }
 
-  redirect(`/coach/players/${playerId}?parentAdded=${encodeURIComponent(email)}`);
+  redirect(`/coach/players/${playerId}?parentAdded=${encodeURIComponent(linkedEmail)}`);
 }
 
 async function resendFamilyInvitation(formData: FormData) {
@@ -301,11 +338,14 @@ export default async function CoachPlayerProfilePage({ params, searchParams }: {
     `/tables/${PLAYER_ACCESS_TABLE_ID}/records?select=AccessID,PlayerID,AccountID,Relationship,IsPrimary,IsActive&where=PlayerID=${playerId}&limit=100`
   )).data?.filter(row => row.IsActive !== false && row.IsActive !== 0) ?? [];
   const family = await Promise.all(accessRows.map(async row => ({ row, account: await getAccount(row.AccountID) })));
+  const accounts = await getAccounts();
+  const linkedAccountIds = new Set(accessRows.map(row => row.AccountID));
+  const availableAccounts = accounts.filter(account => !linkedAccountIds.has(account.AccountID));
 
   const errorMessage = query.error === "missing" ? "First and last name are required."
     : query.error === "delete-confirm" ? "Please confirm that you want to delete this player."
     : query.error === "delete" ? "Unable to delete this player. Please try again."
-    : query.error === "family-missing" ? "Please complete the parent or guardian name and email."
+    : query.error === "family-missing" ? "Select an existing parent account or enter the new parent or guardian's name and email."
     : query.error === "family-exists" ? "That parent or guardian already has access to this player."
     : query.error === "family-email" ? "Family access was added, but the invitation email could not be sent. You can resend it below."
     : query.error === "family-save" ? "Unable to add family access. Please try again."
@@ -375,12 +415,10 @@ export default async function CoachPlayerProfilePage({ params, searchParams }: {
         <div style={{ marginTop: 28 }}>
           <div className="label">ADD FAMILY MEMBER</div>
           <h2>Add a Parent or Guardian</h2>
-          <p className="muted">If the email already belongs to a True Approach Dugout account, that account will be linked automatically. New accounts will receive an invitation email.</p>
+          <p className="muted">Search existing family accounts first. If the person is not already in True Approach Dugout, enter their information to create a new account and send an invitation.</p>
           <form className="form" action={addFamilyAccess}>
             <input type="hidden" name="playerId" value={playerId} />
-            <label>First Name<input name="firstName" required /></label>
-            <label>Last Name<input name="lastName" required /></label>
-            <label>Email<input name="email" type="email" required /></label>
+            <ParentAccountSelector accounts={availableAccounts} />
             <label>Relationship<select name="relationship" defaultValue="Parent"><option>Parent</option><option>Guardian</option><option>Grandparent</option><option>Other</option></select></label>
             <button className="button primary" type="submit">Add Family Access</button>
           </form>
