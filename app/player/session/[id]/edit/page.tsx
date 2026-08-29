@@ -13,12 +13,9 @@ type TrainingSession = { PK_ID: number; SessionID: number; PlayerID: number; Ses
 type SessionResponse = { data: TrainingSession[] };
 type SessionVideo = { PK_ID: number; VideoID: number; SessionID: number; VideoFile: string; Title: string; CoachNote?: string | null; DisplayOrder?: number | null };
 type VideoResponse = { data: SessionVideo[] };
-type UploadResponse = { data: Array<{ fullFilePath: string }> };
 
 async function getSession(sessionId: number) { const result = await caspioFetch<SessionResponse>(`/tables/${SESSIONS_TABLE_ID}/records?select=PK_ID,SessionID,PlayerID,SessionDate,Title,CoachNotes,Status,SessionSource&where=SessionID=${sessionId}&limit=1`); return result.data?.[0] ?? null; }
 async function getContent(sessionId: number) { const result = await caspioFetch<VideoResponse>(`/tables/${SESSION_VIDEOS_TABLE_ID}/records?select=PK_ID,VideoID,SessionID,VideoFile,Title,CoachNote,DisplayOrder&where=SessionID=${sessionId}&orderBy=DisplayOrder,VideoID&limit=200`); return result.data ?? []; }
-function uniqueFileName(originalName: string, index: number) { const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_"); return `${Date.now()}-${index + 1}-${safeName}`; }
-async function uploadContent(file: File, index: number) { const uploadForm = new FormData(); uploadForm.append("Files", file, uniqueFileName(file.name, index)); const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", { method: "POST", body: uploadForm }); const fullFilePath = uploaded.data?.[0]?.fullFilePath; if (!fullFilePath) throw new Error("Stored file path was not returned"); return fullFilePath; }
 
 async function savePlayerSession(sessionId: number, formData: FormData) {
   "use server";
@@ -31,6 +28,11 @@ async function savePlayerSession(sessionId: number, formData: FormData) {
   const sessionNotes = String(formData.get("sessionNotes") ?? "").trim();
   if (!sessionDate || !title) redirect(`/player/session/${sessionId}/edit?playerId=${playerId}&error=missing-fields`);
   const existingContent = await getContent(sessionId);
+  const videoPaths = formData.getAll("videoPath").map((value) => String(value ?? "").trim());
+  const originalNames = formData.getAll("videoOriginalName").map((value) => String(value ?? "").trim());
+  const titles = formData.getAll("videoTitle").map((value) => String(value ?? "").trim());
+  const notes = formData.getAll("videoNote").map((value) => String(value ?? "").trim());
+  const newContent = videoPaths.map((path, index) => ({ path, originalName: originalNames[index] ?? "", title: titles[index] ?? "", note: notes[index] ?? "" })).filter((item) => Boolean(item.path));
 
   try {
     await caspioFetch(`/tables/${SESSIONS_TABLE_ID}/records/${session.PK_ID}`, { method: "PATCH", body: JSON.stringify({ SessionDate: sessionDate, Title: title, CoachNotes: sessionNotes || null }) });
@@ -41,15 +43,10 @@ async function savePlayerSession(sessionId: number, formData: FormData) {
       const nextNote = String(formData.get(`note_${item.PK_ID}`) ?? "").trim();
       await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records/${item.PK_ID}`, { method: "PATCH", body: JSON.stringify({ Title: nextTitle || item.Title, CoachNote: nextNote || null }) });
     }
-    const rawFiles = formData.getAll("video");
-    const titles = formData.getAll("videoTitle").map((value) => String(value ?? "").trim());
-    const notes = formData.getAll("videoNote").map((value) => String(value ?? "").trim());
-    const files = rawFiles.filter((value): value is File => value instanceof File && value.size > 0);
     const remainingCount = existingContent.filter((item) => formData.get(`remove_${item.PK_ID}`) !== "1").length;
-    for (let index = 0; index < files.length; index += 1) {
-      const sourceFile = files[index];
-      const fullFilePath = await uploadContent(sourceFile, index);
-      await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records`, { method: "POST", body: JSON.stringify({ SessionID: sessionId, VideoFile: fullFilePath, Title: titles[index] || sourceFile.name, CoachNote: notes[index] || null, DisplayOrder: remainingCount + index + 1 }) });
+    for (let index = 0; index < newContent.length; index += 1) {
+      const item = newContent[index];
+      await caspioFetch(`/tables/${SESSION_VIDEOS_TABLE_ID}/records`, { method: "POST", body: JSON.stringify({ SessionID: sessionId, VideoFile: item.path, Title: item.title || item.originalName || null, CoachNote: item.note || null, DisplayOrder: remainingCount + index + 1 }) });
     }
   } catch (error) {
     console.error("Player session update failed", error);
