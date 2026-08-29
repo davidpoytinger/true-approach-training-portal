@@ -3,7 +3,7 @@ const DEFAULT_FROM = "support@mail.trueapproachbaseball.com";
 const LOGO_URL = "https://a6defeefbe5ec18834b4.cdn6.editmysite.com/uploads/b/a6defeefbe5ec18834b4ae0b514e538d4f57ff7d613345ef065b5ef7daa9dcfa/TA%20transparent%20PNG_1777845753.png?width=2400&optimize=medium";
 
 function appUrl() {
-  return (process.env.APP_URL || "https://true-approach-training-portal.vercel.app").replace(/\/$/, "");
+  return (process.env.APP_URL || "https://dugout.trueapproachbaseball.com").replace(/\/$/, "");
 }
 
 function escapeHtml(value: string) {
