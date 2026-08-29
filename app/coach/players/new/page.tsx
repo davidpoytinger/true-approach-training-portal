@@ -161,7 +161,7 @@ export default async function NewPlayerPage({ searchParams }: { searchParams: Pr
       {params.error === "missing-parent" ? <p className="errorBanner">Select an existing parent account or enter the new parent/guardian's name and email.</p> : null}
       {params.error === "save-failed" ? <p className="errorBanner">Unable to create the player and family access. Please try again.</p> : null}
 
-      <form className="form" action={createPlayer}>
+      <form className="form newPlayerForm" action={createPlayer}>
         <section className="card coachSection">
           <div className="label">STEP 1</div>
           <h2>Player Information</h2>
