@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { caspioFetch } from "../../../lib/caspio";
 import { requireCoachAdmin } from "../../../lib/coach-auth";
 import { ACCOUNTS_TABLE_ID, PLAYER_ACCESS_TABLE_ID, findAccountByEmail, getAccount, hashPassword } from "../../../lib/player-auth";
+import CoachAccountSelector from "./CoachAccountSelector";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,11 @@ type CoachAccess = {
   CanEditPlayerAddedSessions?: boolean | number | null;
   CanManageAccess?: boolean | number | null;
 };
+type SearchAccount = { AccountID: number; FirstName: string; LastName: string; Email: string; Phone?: string | null; IsActive?: boolean | number | null };
 type AccessResponse = { data?: CoachAccess[] };
+type AccountResponse = { data?: SearchAccount[] };
 type CreateAccountResponse = { data?: Array<{ AccountID?: number; PK_ID?: number }>; AccountID?: number; PK_ID?: number };
-type Params = { saved?: string; error?: string };
+type Params = { saved?: string; error?: string; q?: string };
 
 async function getCoachRows() {
   const where = encodeURIComponent("PlayerID=0 AND Relationship='Coach'");
@@ -25,44 +28,61 @@ async function getCoachRows() {
   return Promise.all((result.data ?? []).map(async access => ({ access, account: await getAccount(access.AccountID) })));
 }
 
+async function getSearchableAccounts(activeCoachIds: Set<number>) {
+  const result = await caspioFetch<AccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,IsActive&orderBy=LastName,FirstName&limit=500`);
+  return (result.data ?? []).filter(account => account.IsActive !== false && account.IsActive !== 0 && !activeCoachIds.has(account.AccountID));
+}
+
 async function addCoach(formData: FormData) {
   "use server";
   await requireCoachAdmin();
-  const firstName = String(formData.get("firstName") ?? "").trim();
-  const lastName = String(formData.get("lastName") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const temporaryPassword = String(formData.get("temporaryPassword") ?? "");
+  const existingAccountId = Number(formData.get("existingAccountId") || 0);
   const role = String(formData.get("role") ?? "Coach") === "Admin" ? "Admin" : "Coach";
-  if (!firstName || !lastName || !email) redirect("/coach/admin?error=missing");
+  let accountId = existingAccountId;
 
-  let account = await findAccountByEmail(email);
-  let accountId = account?.AccountID ?? 0;
-  if (!accountId) {
-    if (temporaryPassword.length < 8) redirect("/coach/admin?error=password");
-    const created = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
-      method: "POST",
-      body: JSON.stringify({
-        FirstName: firstName,
-        LastName: lastName,
-        Email: email,
-        PasswordHash: hashPassword(temporaryPassword),
-        EmailVerified: true,
-        IsActive: true,
-        CreatedAt: new Date().toISOString(),
-        UpdatedAt: new Date().toISOString()
-      })
-    });
-    accountId = Number(created.data?.[0]?.AccountID ?? created.data?.[0]?.PK_ID ?? created.AccountID ?? created.PK_ID);
-    if (!accountId) accountId = (await findAccountByEmail(email))?.AccountID ?? 0;
+  if (accountId) {
+    const existingAccount = await getAccount(accountId);
+    if (!existingAccount || existingAccount.IsActive === false || existingAccount.IsActive === 0) redirect("/coach/admin?error=account");
+  } else {
+    const firstName = String(formData.get("firstName") ?? "").trim();
+    const lastName = String(formData.get("lastName") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const phone = String(formData.get("phone") ?? "").trim();
+    const temporaryPassword = String(formData.get("temporaryPassword") ?? "");
+    if (!firstName || !lastName || !email) redirect("/coach/admin?error=missing");
+
+    const existing = await findAccountByEmail(email);
+    if (existing) {
+      accountId = existing.AccountID;
+    } else {
+      if (temporaryPassword.length < 8) redirect("/coach/admin?error=password");
+      const created = await caspioFetch<CreateAccountResponse>(`/tables/${ACCOUNTS_TABLE_ID}/records?echo=true`, {
+        method: "POST",
+        body: JSON.stringify({
+          FirstName: firstName,
+          LastName: lastName,
+          Email: email,
+          Phone: phone || null,
+          PasswordHash: hashPassword(temporaryPassword),
+          EmailVerified: true,
+          IsActive: true,
+          CreatedAt: new Date().toISOString(),
+          UpdatedAt: new Date().toISOString()
+        })
+      });
+      accountId = Number(created.data?.[0]?.AccountID ?? created.data?.[0]?.PK_ID ?? created.AccountID ?? created.PK_ID);
+      if (!accountId) accountId = (await findAccountByEmail(email))?.AccountID ?? 0;
+    }
   }
+
   if (!accountId) redirect("/coach/admin?error=save");
 
   const existingWhere = encodeURIComponent(`AccountID=${accountId} AND PlayerID=0 AND Relationship='Coach'`);
-  const existing = (await caspioFetch<AccessResponse>(`/tables/${PLAYER_ACCESS_TABLE_ID}/records?select=AccessID,AccountID,IsActive&where=${existingWhere}&limit=1`)).data?.[0];
-  if (existing) {
+  const existingAccess = (await caspioFetch<AccessResponse>(`/tables/${PLAYER_ACCESS_TABLE_ID}/records?select=AccessID,AccountID,IsActive&where=${existingWhere}&limit=1`)).data?.[0];
+  if (existingAccess) {
     await caspioFetch(`/tables/${PLAYER_ACCESS_TABLE_ID}/records/bulk`, {
       method: "PATCH",
-      body: JSON.stringify({ where: `AccessID=${existing.AccessID}`, recordValues: { IsActive: true, AccessLevel: role, CanAddSessions: true, CanEditPlayerAddedSessions: true, CanManageAccess: role === "Admin" } })
+      body: JSON.stringify({ where: `AccessID=${existingAccess.AccessID}`, recordValues: { IsActive: true, AccessLevel: role, CanEditProfile: true, CanAddSessions: true, CanEditPlayerAddedSessions: true, CanManageAccess: role === "Admin" } })
     });
   } else {
     await caspioFetch(`/tables/${PLAYER_ACCESS_TABLE_ID}/records`, {
@@ -109,7 +129,6 @@ async function removeCoach(formData: FormData) {
   const accountId = Number(formData.get("accountId"));
   if (!accessId || !accountId) redirect("/coach/admin?error=missing");
   if (accountId === admin.account.AccountID) redirect("/coach/admin?error=self-remove");
-
   await caspioFetch(`/tables/${PLAYER_ACCESS_TABLE_ID}/records/bulk`, {
     method: "PATCH",
     body: JSON.stringify({ where: `AccessID=${accessId}`, recordValues: { IsActive: false, CanAddSessions: false, CanEditPlayerAddedSessions: false, CanManageAccess: false } })
@@ -121,10 +140,15 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
   const admin = await requireCoachAdmin();
   const params = await searchParams;
   const coaches = await getCoachRows();
+  const activeCoachIds = new Set(coaches.filter(({ access }) => access.IsActive !== false && access.IsActive !== 0).map(({ access }) => access.AccountID));
+  const accounts = await getSearchableAccounts(activeCoachIds);
+  const q = (params.q ?? "").trim().toLowerCase();
+  const visibleCoaches = q ? coaches.filter(({ account }) => account && `${account.FirstName} ${account.LastName} ${account.Email}`.toLowerCase().includes(q)) : coaches;
   const error = params.error === "password" ? "A temporary password of at least 8 characters is required for a brand-new account."
     : params.error === "self" ? "You cannot deactivate your own coach account."
     : params.error === "self-remove" ? "You cannot remove your own coach access."
     : params.error === "email" ? "That email is already used by another account."
+    : params.error === "account" ? "That Dugout account is not available."
     : params.error ? "Unable to save that coach. Please check the required fields."
     : "";
 
@@ -137,12 +161,8 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
       <section className="card coachSection">
         <div className="label">ADD COACH</div>
         <h2>Create or Grant Coach Access</h2>
-        <p className="muted">If the email already belongs to a Dugout account, the existing login will be granted coach access. For a new account, set a temporary password the coach can change in Account Settings.</p>
         <form className="form" action={addCoach}>
-          <label>First Name<input name="firstName" required /></label>
-          <label>Last Name<input name="lastName" required /></label>
-          <label>Email<input name="email" type="email" required /></label>
-          <label>Temporary Password<input name="temporaryPassword" type="password" minLength={8} placeholder="Only required for a new account" /></label>
+          <CoachAccountSelector accounts={accounts} />
           <label>Role<select name="role" defaultValue="Coach"><option>Coach</option><option>Admin</option></select></label>
           <button className="button primary" type="submit">Add Coach</button>
         </form>
@@ -151,9 +171,14 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
       <section className="coachSection">
         <div className="label">COACH PROFILES</div>
         <h2>Manage Coaches</h2>
-        <p className="muted">Control each coach's access here. Removing coach access does not delete their Dugout account or any sessions they previously created.</p>
+        <p className="muted">Search existing coaches, update permissions, deactivate access, or remove coach access entirely.</p>
+        <form method="get" className="playerSearch" style={{ marginBottom: 18 }}>
+          <input name="q" type="search" defaultValue={params.q ?? ""} placeholder="Search coaches by name or email" />
+          <button className="button secondary" type="submit">Search</button>
+        </form>
+        {q ? <div className="actions" style={{ marginTop: 0, marginBottom: 18 }}><Link href="/coach/admin" className="textLink">Clear search</Link><span className="muted">{visibleCoaches.length} result{visibleCoaches.length === 1 ? "" : "s"}</span></div> : null}
         <div className="stack">
-          {coaches.map(({ access, account }) => account ? (
+          {visibleCoaches.map(({ access, account }) => account ? (
             <div className="card" key={access.AccessID}>
               <form className="form" action={updateCoach}>
                 <input type="hidden" name="accessId" value={access.AccessID} />
@@ -176,6 +201,7 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
               </form>
             </div>
           ) : null)}
+          {!visibleCoaches.length ? <div className="card muted">No coaches match that search.</div> : null}
         </div>
       </section>
     </main>
