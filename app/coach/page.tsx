@@ -16,7 +16,7 @@ export default async function CoachDashboard() {
       <header className="topbar">
         <div><h1>Coach Portal</h1><div className="muted">Signed in as {coach.account.FirstName} {coach.account.LastName}</div></div>
         <div className="actions">
-          <Link href="/account" className="textLink">My Profile</Link>
+          <Link href="/account?from=coach" className="textLink">My Profile</Link>
           {coach.canManageCoaches ? <Link href="/coach/admin" className="textLink">Manage Coaches</Link> : null}
           <form action={logout}><button className="textLink" type="submit">Log out</button></form>
         </div>
