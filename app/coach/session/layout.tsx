@@ -1,0 +1,8 @@
+import { redirect } from "next/navigation";
+import { requireCoach } from "../../../lib/coach-auth";
+
+export default async function CoachSessionLayout({ children }: { children: React.ReactNode }) {
+  const coach = await requireCoach();
+  if (!coach.canAddSessions) redirect("/coach");
+  return children;
+}
