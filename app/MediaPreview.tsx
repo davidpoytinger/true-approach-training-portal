@@ -10,6 +10,11 @@ type MediaPreviewProps = {
   poster?: string;
 };
 
+function lightweightImageSrc(src: string) {
+  const match = /^\/api\/video\/(\d+)(?:\?.*)?$/.exec(src);
+  return match ? `/api/content-thumbnail/${match[1]}` : src;
+}
+
 export default function MediaPreview({ src, alt, className = "storedVideoPreview", kind = "image", poster }: MediaPreviewProps) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -47,7 +52,7 @@ export default function MediaPreview({ src, alt, className = "storedVideoPreview
           aria-label={`Load and play ${alt}`}
           disabled={loading}
         >
-          {poster ? <img src={poster} alt="" loading="lazy" decoding="async" /> : <span className="storedVideoFallback">Video</span>}
+          {poster ? <img src={lightweightImageSrc(poster)} alt="" loading="lazy" decoding="async" /> : <span className="storedVideoFallback">Video</span>}
           <span className="storedVideoPlayButton" aria-hidden="true">▶</span>
           <span className="storedVideoTapLabel">{loading ? "Loading video…" : error ? "Tap to retry" : "Tap to play"}</span>
         </button>
@@ -55,11 +60,11 @@ export default function MediaPreview({ src, alt, className = "storedVideoPreview
     }
 
     return (
-      <video className={className} controls playsInline preload="auto" autoPlay poster={poster} src={blobUrl}>
+      <video className={className} controls playsInline preload="auto" autoPlay poster={poster ? lightweightImageSrc(poster) : undefined} src={blobUrl}>
         Your browser does not support video playback.
       </video>
     );
   }
 
-  return <img className={className} src={src} alt={alt} loading="lazy" decoding="async" />;
+  return <img className={className} src={lightweightImageSrc(src)} alt={alt} loading="lazy" decoding="async" />;
 }
