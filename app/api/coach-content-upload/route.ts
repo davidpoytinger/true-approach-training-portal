@@ -1,40 +1,57 @@
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
-import { caspioFetch } from "../../../lib/caspio";
 import { getCurrentCoach } from "../../../lib/coach-auth";
 
 export const dynamic = "force-dynamic";
 
-const MAX_FILE_BYTES = 3_800_000;
-
-type UploadResponse = { data: Array<{ name: string; fileId: string; fullFilePath: string }> };
-
-function uniqueFileName(originalName: string) {
-  const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName}`;
-}
+const MAX_FILE_BYTES = 250 * 1024 * 1024;
+const ALLOWED_CONTENT_TYPES = [
+  "video/mp4",
+  "video/quicktime",
+  "video/x-m4v",
+  "video/webm",
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+  "image/bmp",
+  "image/heic",
+  "image/heif",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+];
 
 export async function POST(request: Request) {
   const coach = await getCurrentCoach();
   if (!coach || !coach.canAddSessions) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const contentLength = Number(request.headers.get("content-length") || 0);
-  if (contentLength > 4_100_000) return NextResponse.json({ error: "File is too large" }, { status: 413 });
-
   try {
-    const formData = await request.formData();
-    const file = formData.get("file");
-    if (!(file instanceof File) || file.size <= 0) return NextResponse.json({ error: "No file selected" }, { status: 400 });
-    if (file.size > MAX_FILE_BYTES) return NextResponse.json({ error: "File is too large" }, { status: 413 });
-
-    const uploadForm = new FormData();
-    uploadForm.append("Files", file, uniqueFileName(file.name));
-    const uploaded = await caspioFetch<UploadResponse>("/fileAssets/files/bulk", { method: "POST", body: uploadForm });
-    const fullFilePath = uploaded.data?.[0]?.fullFilePath;
-    if (!fullFilePath) throw new Error("Caspio did not return a file path");
-
-    return NextResponse.json({ path: fullFilePath, name: file.name });
+    const body = (await request.json()) as HandleUploadBody;
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (pathname) => {
+        if (!pathname.startsWith("session-content/")) throw new Error("Invalid upload path");
+        return {
+          allowedContentTypes: ALLOWED_CONTENT_TYPES,
+          maximumSizeInBytes: MAX_FILE_BYTES,
+          addRandomSuffix: true,
+          tokenPayload: JSON.stringify({ coachAccountId: coach.account.AccountID })
+        };
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        console.log("Coach Blob upload completed", blob.pathname, tokenPayload);
+      }
+    });
+    return NextResponse.json(jsonResponse);
   } catch (error) {
-    console.error("Coach content upload failed", error);
-    return NextResponse.json({ error: "Unable to upload this file" }, { status: 500 });
+    console.error("Coach Blob upload authorization failed", error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to authorize upload" }, { status: 400 });
   }
 }
