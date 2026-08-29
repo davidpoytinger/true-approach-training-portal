@@ -21,7 +21,7 @@ type AccessRow = { AccountID: number; IsActive?: boolean | number | null };
 type AccessResponse = { data: AccessRow[] };
 type SessionContent = { VideoID: number; VideoFile: string; Title?: string | null; DisplayOrder?: number | null };
 type SessionContentResponse = { data: SessionContent[] };
-type Params = { saved?: string; error?: string; playerId?: string; sessionDate?: string; title?: string; coachNotes?: string; videoTitles?: string; videoNotes?: string; videoCount?: string; emailed?: string };
+type Params = { saved?: string; error?: string; playerId?: string; sessionDate?: string; title?: string; coachNotes?: string; videoTitles?: string; videoNotes?: string; videoCount?: string; emailed?: string; emailSkipped?: string };
 
 async function getPlayers(): Promise<Player[]> {
   const result = await caspioFetch<PlayerResponse>(`/tables/${PLAYERS_TABLE_ID}/records?select=PlayerID,FirstName,LastName,IsActive&where=IsActive=1&orderBy=LastName,FirstName&limit=200`);
@@ -168,6 +168,7 @@ async function publishSession(formData: FormData) {
   const sessionDate = String(formData.get("sessionDate") ?? "");
   const title = String(formData.get("title") ?? "").trim();
   const coachNotes = String(formData.get("coachNotes") ?? "").trim();
+  const suppressEmail = formData.get("suppressEmail") === "on";
   const rawVideos = formData.getAll("video");
   const videoTitles = formData.getAll("videoTitle").map((value) => String(value ?? "").trim());
   const videoNotes = formData.getAll("videoNote").map((value) => String(value ?? "").trim());
@@ -207,13 +208,13 @@ async function publishSession(formData: FormData) {
       }
     }
 
-    emailed = await notifyFamily(playerId, sessionId, title, sessionDate);
+    if (!suppressEmail) emailed = await notifyFamily(playerId, sessionId, title, sessionDate);
   } catch (error) {
     console.error("Publish session failed", error);
     errorRedirect({ playerId, sessionDate, title, coachNotes, videoTitles, videoNotes });
   }
 
-  const params = new URLSearchParams({ saved: "1", playerId: String(playerId), sessionDate, title, videoCount: String(contentEntries.length), emailed: String(emailed) });
+  const params = new URLSearchParams({ saved: "1", playerId: String(playerId), sessionDate, title, videoCount: String(contentEntries.length), emailed: String(emailed), emailSkipped: suppressEmail ? "1" : "0" });
   redirect(`/coach/session/new?${params.toString()}`);
 }
 
@@ -233,6 +234,7 @@ export default async function NewSessionPage({ searchParams }: { searchParams: P
   const initialVideoNotes = retrying ? parseArray(params.videoNotes) : [""];
   const videoCount = Number(params.videoCount ?? 0);
   const emailed = Number(params.emailed ?? 0);
+  const emailSkipped = params.emailSkipped === "1";
 
-  return <main className="shell"><header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Session</h1><div className="muted">Coach: {coach.account.FirstName} {coach.account.LastName}</div></div><Link href="/coach" className="textLink">Coach Home</Link></header><section className="card coachSection"><div className="label">ADD SESSION</div><h2>Create a Training Session</h2>{params.saved === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>Session published successfully</strong><p>{params.title || "Training session"} for {selectedPlayerName}{savedDate ? ` on ${savedDate}` : ""} was saved.{videoCount > 0 ? ` ${videoCount} content item${videoCount === 1 ? " was" : "s were"} uploaded and linked to this session.` : ""}{emailed > 0 ? ` ${emailed} family notification email${emailed === 1 ? " was" : "s were"} sent.` : ""}</p><span>You can add another session or return to Coach Home.</span></div></div> : null}{params.error === "missing-fields" ? <p className="errorBanner">Please select a player and enter a session date and title.</p> : null}{retrying ? <p className="errorBanner">Unable to save the session or content. Your form details were preserved below. Please reselect the content files and try again.</p> : null}<form className="form" action={publishSession}><label>Player<select name="playerId" defaultValue={params.playerId ?? ""} required><option value="" disabled>{playerLoadError ? "Unable to load players" : players.length ? "Select a player" : "No active players yet"}</option>{players.map((player) => <option key={player.PlayerID} value={player.PlayerID}>{player.FirstName} {player.LastName}</option>)}</select></label><label>Session Date<input name="sessionDate" type="date" defaultValue={retrying ? params.sessionDate ?? today : today} required /></label><label>Session Title<input name="title" type="text" defaultValue={retrying ? params.title ?? "Hitting Session" : "Hitting Session"} required /></label><div className="formField"><div className="formFieldLabel">Overall Coach Notes</div><RichTextEditor name="coachNotes" initialValue={retrying ? params.coachNotes ?? "" : ""} placeholder="What should the player focus on?" /></div><VideoFields initialTitles={initialVideoTitles} initialNotes={initialVideoNotes} /><button className="button primary" type="submit" disabled={!players.length || playerLoadError}>Publish Session</button></form></section></main>;
+  return <main className="shell"><header className="topbar"><div><div className="eyebrow">TRUE APPROACH BASEBALL</div><h1>New Session</h1><div className="muted">Coach: {coach.account.FirstName} {coach.account.LastName}</div></div><Link href="/coach" className="textLink">Coach Home</Link></header><section className="card coachSection"><div className="label">ADD SESSION</div><h2>Create a Training Session</h2>{params.saved === "1" ? <div className="successBanner" role="status"><div className="successIcon">✓</div><div><strong>Session published successfully</strong><p>{params.title || "Training session"} for {selectedPlayerName}{savedDate ? ` on ${savedDate}` : ""} was saved.{videoCount > 0 ? ` ${videoCount} content item${videoCount === 1 ? " was" : "s were"} uploaded and linked to this session.` : ""}{emailSkipped ? " Family notification email was skipped." : emailed > 0 ? ` ${emailed} family notification email${emailed === 1 ? " was" : "s were"} sent.` : ""}</p><span>You can add another session or return to Coach Home.</span></div></div> : null}{params.error === "missing-fields" ? <p className="errorBanner">Please select a player and enter a session date and title.</p> : null}{retrying ? <p className="errorBanner">Unable to save the session or content. Your form details were preserved below. Please reselect the content files and try again.</p> : null}<form className="form" action={publishSession}><label>Player<select name="playerId" defaultValue={params.playerId ?? ""} required><option value="" disabled>{playerLoadError ? "Unable to load players" : players.length ? "Select a player" : "No active players yet"}</option>{players.map((player) => <option key={player.PlayerID} value={player.PlayerID}>{player.FirstName} {player.LastName}</option>)}</select></label><label>Session Date<input name="sessionDate" type="date" defaultValue={retrying ? params.sessionDate ?? today : today} required /></label><label>Session Title<input name="title" type="text" defaultValue={retrying ? params.title ?? "Hitting Session" : "Hitting Session"} required /></label><div className="formField"><div className="formFieldLabel">Overall Coach Notes</div><RichTextEditor name="coachNotes" initialValue={retrying ? params.coachNotes ?? "" : ""} placeholder="What should the player focus on?" /></div><VideoFields initialTitles={initialVideoTitles} initialNotes={initialVideoNotes} /><label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center", gap: 10, fontWeight: 700 }}><input name="suppressEmail" type="checkbox" style={{ width: "auto" }} /> Do not send a family notification email for this session</label><button className="button primary" type="submit" disabled={!players.length || playerLoadError}>Publish Session</button></form></section></main>;
 }
