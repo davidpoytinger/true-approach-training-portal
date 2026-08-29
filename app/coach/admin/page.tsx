@@ -112,21 +112,13 @@ async function removeCoach(formData: FormData) {
 
   await caspioFetch(`/tables/${PLAYER_ACCESS_TABLE_ID}/records/bulk`, {
     method: "PATCH",
-    body: JSON.stringify({
-      where: `AccessID=${accessId}`,
-      recordValues: {
-        IsActive: false,
-        CanAddSessions: false,
-        CanEditPlayerAddedSessions: false,
-        CanManageAccess: false
-      }
-    })
+    body: JSON.stringify({ where: `AccessID=${accessId}`, recordValues: { IsActive: false, CanAddSessions: false, CanEditPlayerAddedSessions: false, CanManageAccess: false } })
   });
   redirect("/coach/admin?saved=removed");
 }
 
 export default async function CoachAdminPage({ searchParams }: { searchParams: Promise<Params> }) {
-  await requireCoachAdmin();
+  const admin = await requireCoachAdmin();
   const params = await searchParams;
   const coaches = await getCoachRows();
   const error = params.error === "password" ? "A temporary password of at least 8 characters is required for a brand-new account."
@@ -180,7 +172,7 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
               <form action={removeCoach} style={{ marginTop: 12 }}>
                 <input type="hidden" name="accessId" value={access.AccessID} />
                 <input type="hidden" name="accountId" value={account.AccountID} />
-                <button className="button secondary" type="submit" disabled={account.AccountID === (await requireCoachAdmin()).account.AccountID}>Remove Coach Access</button>
+                <button className="button secondary" type="submit" disabled={account.AccountID === admin.account.AccountID}>Remove Coach Access</button>
               </form>
             </div>
           ) : null)}
