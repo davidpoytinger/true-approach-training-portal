@@ -102,12 +102,36 @@ async function updateCoach(formData: FormData) {
   redirect("/coach/admin?saved=updated");
 }
 
+async function removeCoach(formData: FormData) {
+  "use server";
+  const admin = await requireCoachAdmin();
+  const accessId = Number(formData.get("accessId"));
+  const accountId = Number(formData.get("accountId"));
+  if (!accessId || !accountId) redirect("/coach/admin?error=missing");
+  if (accountId === admin.account.AccountID) redirect("/coach/admin?error=self-remove");
+
+  await caspioFetch(`/tables/${PLAYER_ACCESS_TABLE_ID}/records/bulk`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      where: `AccessID=${accessId}`,
+      recordValues: {
+        IsActive: false,
+        CanAddSessions: false,
+        CanEditPlayerAddedSessions: false,
+        CanManageAccess: false
+      }
+    })
+  });
+  redirect("/coach/admin?saved=removed");
+}
+
 export default async function CoachAdminPage({ searchParams }: { searchParams: Promise<Params> }) {
   await requireCoachAdmin();
   const params = await searchParams;
   const coaches = await getCoachRows();
   const error = params.error === "password" ? "A temporary password of at least 8 characters is required for a brand-new account."
     : params.error === "self" ? "You cannot deactivate your own coach account."
+    : params.error === "self-remove" ? "You cannot remove your own coach access."
     : params.error === "email" ? "That email is already used by another account."
     : params.error ? "Unable to save that coach. Please check the required fields."
     : "";
@@ -115,7 +139,7 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
   return (
     <main className="shell">
       <header className="topbar"><div><h1>Coach Management</h1></div><Link href="/coach" className="textLink">Coach Home</Link></header>
-      {params.saved ? <p className="successBanner">Coach access {params.saved === "added" ? "added" : "updated"}.</p> : null}
+      {params.saved ? <p className="successBanner">{params.saved === "added" ? "Coach access added." : params.saved === "removed" ? "Coach access removed." : "Coach access updated."}</p> : null}
       {error ? <p className="errorBanner">{error}</p> : null}
 
       <section className="card coachSection">
@@ -135,22 +159,30 @@ export default async function CoachAdminPage({ searchParams }: { searchParams: P
       <section className="coachSection">
         <div className="label">COACH PROFILES</div>
         <h2>Manage Coaches</h2>
+        <p className="muted">Control each coach's access here. Removing coach access does not delete their Dugout account or any sessions they previously created.</p>
         <div className="stack">
           {coaches.map(({ access, account }) => account ? (
-            <form className="card form" action={updateCoach} key={access.AccessID}>
-              <input type="hidden" name="accessId" value={access.AccessID} />
-              <input type="hidden" name="accountId" value={account.AccountID} />
-              <div><strong>{account.FirstName} {account.LastName}</strong><div className="muted">{access.AccessLevel || "Coach"}</div></div>
-              <label>First Name<input name="firstName" defaultValue={account.FirstName} required /></label>
-              <label>Last Name<input name="lastName" defaultValue={account.LastName} required /></label>
-              <label>Email<input name="email" type="email" defaultValue={account.Email} required /></label>
-              <label>Role<select name="role" defaultValue={access.AccessLevel === "Admin" ? "Admin" : "Coach"}><option>Coach</option><option>Admin</option></select></label>
-              <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="isActive" type="checkbox" defaultChecked={access.IsActive !== false && access.IsActive !== 0} style={{ width: "auto" }} /> Active coach</label>
-              <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canManagePlayers" type="checkbox" defaultChecked={access.CanEditPlayerAddedSessions !== false && access.CanEditPlayerAddedSessions !== 0} style={{ width: "auto" }} /> Manage players</label>
-              <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canAddSessions" type="checkbox" defaultChecked={access.CanAddSessions !== false && access.CanAddSessions !== 0} style={{ width: "auto" }} /> Add training sessions</label>
-              <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canManageCoaches" type="checkbox" defaultChecked={access.CanManageAccess === true || access.CanManageAccess === 1 || access.AccessLevel === "Admin"} style={{ width: "auto" }} /> Manage coaches</label>
-              <button className="button primary" type="submit">Save Coach</button>
-            </form>
+            <div className="card" key={access.AccessID}>
+              <form className="form" action={updateCoach}>
+                <input type="hidden" name="accessId" value={access.AccessID} />
+                <input type="hidden" name="accountId" value={account.AccountID} />
+                <div><strong>{account.FirstName} {account.LastName}</strong><div className="muted">{access.IsActive === false || access.IsActive === 0 ? "Inactive" : access.AccessLevel || "Coach"}</div></div>
+                <label>First Name<input name="firstName" defaultValue={account.FirstName} required /></label>
+                <label>Last Name<input name="lastName" defaultValue={account.LastName} required /></label>
+                <label>Email<input name="email" type="email" defaultValue={account.Email} required /></label>
+                <label>Role<select name="role" defaultValue={access.AccessLevel === "Admin" ? "Admin" : "Coach"}><option>Coach</option><option>Admin</option></select></label>
+                <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="isActive" type="checkbox" defaultChecked={access.IsActive !== false && access.IsActive !== 0} style={{ width: "auto" }} /> Active coach</label>
+                <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canManagePlayers" type="checkbox" defaultChecked={access.CanEditPlayerAddedSessions !== false && access.CanEditPlayerAddedSessions !== 0} style={{ width: "auto" }} /> Manage players</label>
+                <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canAddSessions" type="checkbox" defaultChecked={access.CanAddSessions !== false && access.CanAddSessions !== 0} style={{ width: "auto" }} /> Add training sessions</label>
+                <label style={{ display: "flex", gridTemplateColumns: "auto 1fr", alignItems: "center" }}><input name="canManageCoaches" type="checkbox" defaultChecked={access.CanManageAccess === true || access.CanManageAccess === 1 || access.AccessLevel === "Admin"} style={{ width: "auto" }} /> Manage coaches</label>
+                <button className="button primary" type="submit">Save Coach</button>
+              </form>
+              <form action={removeCoach} style={{ marginTop: 12 }}>
+                <input type="hidden" name="accessId" value={access.AccessID} />
+                <input type="hidden" name="accountId" value={account.AccountID} />
+                <button className="button secondary" type="submit" disabled={account.AccountID === (await requireCoachAdmin()).account.AccountID}>Remove Coach Access</button>
+              </form>
+            </div>
           ) : null)}
         </div>
       </section>
