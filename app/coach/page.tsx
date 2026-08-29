@@ -9,8 +9,6 @@ export default function CoachDashboard() {
       </header>
 
       <section className="coachHomeIntro">
-        <div className="label">COACH DASHBOARD</div>
-        <h2>What would you like to do?</h2>
         <p className="muted">Choose an action below to manage players and training sessions.</p>
       </section>
 
