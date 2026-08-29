@@ -1,3 +1,4 @@
+import { issueSignedToken, presignUrl } from "@vercel/blob";
 import { NextRequest } from "next/server";
 import { caspioFetch, caspioRawFetch } from "../../../../lib/caspio";
 
@@ -89,6 +90,18 @@ function sliceReadableStream(source: ReadableStream<Uint8Array>, start: number, 
   });
 }
 
+async function privateBlobRedirect(pathname: string) {
+  const validUntil = Date.now() + 10 * 60 * 1000;
+  const token = await issueSignedToken({ pathname, operations: ["get"], validUntil });
+  const { presignedUrl } = await presignUrl(token, {
+    operation: "get",
+    pathname,
+    access: "private",
+    validUntil
+  });
+  return Response.redirect(presignedUrl, 302);
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const videoId = Number(id);
@@ -98,6 +111,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const recordResult = await caspioFetch<VideoResponse>(`/tables/${SESSION_VIDEOS_TABLE_ID}/records?select=VideoID,VideoFile&where=VideoID=${videoId}&limit=1`);
     const video = recordResult.data?.[0];
     if (!video?.VideoFile) return new Response("Content not found", { status: 404 });
+
+    if (video.VideoFile.startsWith("session-content/")) {
+      return await privateBlobRedirect(video.VideoFile);
+    }
 
     const name = fileName(video.VideoFile);
     const searchResult = await caspioFetch<FileSearchResponse>(`/fileAssets/files/search?name=${encodeURIComponent(name)}`);
