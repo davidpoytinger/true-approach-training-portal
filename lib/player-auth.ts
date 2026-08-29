@@ -13,6 +13,7 @@ export type Account = {
   FirstName: string;
   LastName: string;
   Email: string;
+  Phone?: string | null;
   PasswordHash?: string | null;
   EmailVerified?: boolean | number | null;
   IsActive?: boolean | number | null;
@@ -57,11 +58,11 @@ export async function getAccountId() {
 export async function findAccountByEmail(email: string) {
   const escaped = email.toLowerCase().replace(/'/g, "''");
   const where = encodeURIComponent(`Email='${escaped}'`);
-  const r = await caspioFetch<Response<Account>>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,PasswordHash,EmailVerified,IsActive&where=${where}&limit=1`);
+  const r = await caspioFetch<Response<Account>>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,PasswordHash,EmailVerified,IsActive&where=${where}&limit=1`);
   return r.data?.[0] ?? null;
 }
 export async function getAccount(id: number) {
-  const r = await caspioFetch<Response<Account>>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,PasswordHash,EmailVerified,IsActive&where=AccountID=${id}&limit=1`);
+  const r = await caspioFetch<Response<Account>>(`/tables/${ACCOUNTS_TABLE_ID}/records?select=AccountID,FirstName,LastName,Email,Phone,PasswordHash,EmailVerified,IsActive&where=AccountID=${id}&limit=1`);
   return r.data?.[0] ?? null;
 }
 export async function getPlayerAccess(id: number) {
