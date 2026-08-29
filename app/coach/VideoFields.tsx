@@ -1,5 +1,6 @@
 "use client";
 
+import { upload } from "@vercel/blob/client";
 import { useEffect, useState } from "react";
 
 type ContentDraft = {
@@ -12,9 +13,10 @@ type ContentDraft = {
   uploadedPath?: string;
   uploadStatus?: "idle" | "uploading" | "ready" | "error";
   uploadError?: string;
+  uploadProgress?: number;
 };
 
-const MAX_FILE_BYTES = 3_800_000;
+const MAX_FILE_BYTES = 250 * 1024 * 1024;
 
 function isDocument(file?: File) {
   if (!file) return false;
@@ -24,6 +26,10 @@ function isDocument(file?: File) {
 function documentLabel(fileName?: string) {
   const extension = fileName?.split(".").pop()?.toUpperCase();
   return extension && extension.length <= 5 ? extension : "DOC";
+}
+
+function safeFileName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
 function renderJpeg(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
@@ -94,15 +100,6 @@ async function createVideoThumbnail(file: File): Promise<string | undefined> {
   });
 }
 
-async function uploadFile(file: File) {
-  const formData = new FormData();
-  formData.append("file", file, file.name);
-  const response = await fetch("/api/coach-content-upload", { method: "POST", body: formData });
-  const result = await response.json().catch(() => ({})) as { path?: string; error?: string };
-  if (!response.ok || !result.path) throw new Error(result.error || "Unable to upload this file");
-  return result.path;
-}
-
 async function uploadThumbnail(contentPath: string, dataUrl?: string) {
   if (!dataUrl) return;
   await fetch("/api/coach-content-thumbnail", {
@@ -120,7 +117,8 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""],
     note: initialNotes[index] ?? "",
     uploadedPath: initialPaths[index] || undefined,
     fileName: initialFileNames[index] || undefined,
-    uploadStatus: initialPaths[index] ? "ready" : "idle"
+    uploadStatus: initialPaths[index] ? "ready" : "idle",
+    uploadProgress: initialPaths[index] ? 100 : 0
   })));
   const [formError, setFormError] = useState("");
 
@@ -142,7 +140,7 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""],
     return () => form.removeEventListener("submit", handler);
   }, [content]);
 
-  function addContent() { setContent((current) => [...current, { id: Math.max(...current.map((item) => item.id), 0) + 1, title: "", note: "", uploadStatus: "idle" }]); }
+  function addContent() { setContent((current) => [...current, { id: Math.max(...current.map((item) => item.id), 0) + 1, title: "", note: "", uploadStatus: "idle", uploadProgress: 0 }]); }
   function removeContent(id: number) { setContent((current) => { const removed = current.find((item) => item.id === id); if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl); return current.filter((item) => item.id !== id); }); setFormError(""); }
 
   async function selectContent(id: number, file?: File) {
@@ -150,31 +148,41 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""],
     setContent((current) => current.map((item) => {
       if (item.id !== id) return item;
       if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-      if (!file) return { ...item, previewUrl: undefined, fileName: undefined, fileType: undefined, uploadedPath: undefined, uploadStatus: "idle", uploadError: undefined };
-      return { ...item, previewUrl: URL.createObjectURL(file), fileName: file.name, fileType: file.type, uploadedPath: undefined, uploadStatus: "uploading", uploadError: undefined };
+      if (!file) return { ...item, previewUrl: undefined, fileName: undefined, fileType: undefined, uploadedPath: undefined, uploadStatus: "idle", uploadError: undefined, uploadProgress: 0 };
+      return { ...item, previewUrl: URL.createObjectURL(file), fileName: file.name, fileType: file.type, uploadedPath: undefined, uploadStatus: "uploading", uploadError: undefined, uploadProgress: 0 };
     }));
 
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) {
-      setContent((current) => current.map((item) => item.id === id ? { ...item, uploadStatus: "error", uploadError: "This file is too large. Please trim or compress it below 3.8 MB and select it again." } : item));
+      setContent((current) => current.map((item) => item.id === id ? { ...item, uploadStatus: "error", uploadError: "This file is larger than the 250 MB upload limit.", uploadProgress: 0 } : item));
       return;
     }
 
     try {
       const thumbnailPromise = file.type.startsWith("video/") ? createVideoThumbnail(file) : file.type.startsWith("image/") ? createImageThumbnail(file) : Promise.resolve(undefined);
-      const path = await uploadFile(file);
+      const pathname = `session-content/${Date.now()}-${safeFileName(file.name)}`;
+      const blob = await upload(pathname, file, {
+        access: "private",
+        handleUploadUrl: "/api/coach-content-upload",
+        contentType: file.type || undefined,
+        multipart: true,
+        onUploadProgress: ({ percentage }) => {
+          setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, uploadProgress: Math.round(percentage) } : item));
+        }
+      });
       const thumbnail = await thumbnailPromise;
-      await uploadThumbnail(path, thumbnail);
-      setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, uploadedPath: path, uploadStatus: "ready", uploadError: undefined } : item));
+      await uploadThumbnail(blob.pathname, thumbnail);
+      setContent((current) => current.map((item) => item.id === id && item.fileName === file.name ? { ...item, uploadedPath: blob.pathname, uploadStatus: "ready", uploadError: undefined, uploadProgress: 100 } : item));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload this file";
-      setContent((current) => current.map((item) => item.id === id ? { ...item, uploadedPath: undefined, uploadStatus: "error", uploadError: message } : item));
+      setContent((current) => current.map((item) => item.id === id ? { ...item, uploadedPath: undefined, uploadStatus: "error", uploadError: message, uploadProgress: 0 } : item));
     }
   }
 
   return (
     <fieldset>
       <legend>Content</legend>
+      <p className="muted">Videos can be up to 250 MB each. Files upload directly and can be added one after another.</p>
       {formError ? <p className="errorBanner">{formError}</p> : null}
       <div className="videoFields">
         {content.map((item) => {
@@ -188,7 +196,7 @@ export default function VideoFields({ initialTitles = [""], initialNotes = [""],
               {item.fileType?.startsWith("image/") ? <img className="videoPreview" src={item.previewUrl} alt={item.title || item.fileName || "Content preview"} /> : document ? <div className="documentPreview"><div className="documentIcon">{documentLabel(item.fileName)}</div><span className="videoPreviewName">{item.fileName}</span></div> : <video className="videoPreview" src={item.previewUrl} controls preload="metadata" playsInline />}
               {!document ? <span className="videoPreviewName">{item.fileName}</span> : null}
             </div> : item.uploadedPath && item.fileName ? <div className="documentPreview"><div className="documentIcon">✓</div><span className="videoPreviewName">{item.fileName}</span></div> : null}
-            {item.uploadStatus === "uploading" ? <div className="muted">Uploading content…</div> : null}
+            {item.uploadStatus === "uploading" ? <div className="muted">Uploading content… {item.uploadProgress ?? 0}%</div> : null}
             {item.uploadStatus === "ready" ? <div className="muted">Upload complete. Ready to publish.</div> : null}
             {item.uploadStatus === "error" ? <div className="errorBanner">{item.uploadError || "Upload failed. Please select the file again."}</div> : null}
             <label>Content Title<input name="videoTitle" type="text" placeholder="Example: Front View" defaultValue={item.title} /></label>
