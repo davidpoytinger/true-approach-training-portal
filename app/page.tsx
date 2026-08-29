@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+const logoUrl = "https://a6defeefbe5ec18834b4.cdn6.editmysite.com/uploads/b/a6defeefbe5ec18834b4ae0b514e538d4f57ff7d613345ef065b5ef7daa9dcfa/TA%20transparent%20PNG_1777845753.png?width=2400&optimize=medium";
+
 export default function Home() {
   return (
     <main className="shell homeShell">
@@ -13,9 +15,8 @@ export default function Home() {
             <Link className="button secondary" href="/coach">Coach Portal</Link>
           </div>
         </div>
-        <div className="homeBaseballMark" aria-hidden="true">
-          <span className="homeSeam homeSeamLeft" />
-          <span className="homeSeam homeSeamRight" />
+        <div className="homeTaWatermark" aria-hidden="true">
+          <img src={logoUrl} alt="" />
         </div>
       </section>
     </main>
