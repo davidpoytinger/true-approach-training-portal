@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import styles from "./CoachAccountSelector.module.css";
 
 type Account = {
   AccountID: number;
@@ -25,13 +26,13 @@ export default function CoachAccountSelector({ accounts }: { accounts: Account[]
   const selected = selectedId ? accounts.find(account => account.AccountID === selectedId) ?? null : null;
 
   return (
-    <div className="coachAccountLookup">
+    <div className={styles.lookup}>
       <input type="hidden" name="existingAccountId" value={selectedId ?? ""} />
       <div className="label">FIND EXISTING DUGOUT ACCOUNT</div>
       <p className="muted">Search by name, email, or phone. Select an account to grant coach access without re-entering their information.</p>
 
       {selected ? (
-        <div className="coachAccountSelected">
+        <div className={styles.selected}>
           <div>
             <strong>{selected.FirstName} {selected.LastName}</strong>
             <div className="muted">{selected.Email}{selected.Phone ? ` · ${selected.Phone}` : ""}</div>
@@ -48,21 +49,21 @@ export default function CoachAccountSelector({ accounts }: { accounts: Account[]
             autoComplete="off"
           />
           {query.trim().length >= 2 ? (
-            <div className="coachAccountResults">
+            <div className={styles.results}>
               {matches.map(account => (
-                <button key={account.AccountID} type="button" className="coachAccountResult" onClick={() => setSelectedId(account.AccountID)}>
+                <button key={account.AccountID} type="button" className={styles.result} onClick={() => setSelectedId(account.AccountID)}>
                   <span><strong>{account.FirstName} {account.LastName}</strong><small>{account.Email}</small></span>
                   <span>{account.Phone || "Select"}</span>
                 </button>
               ))}
-              {!matches.length ? <div className="coachAccountEmpty">No matching Dugout account found. Create a new coach account below.</div> : null}
+              {!matches.length ? <div className={styles.empty}>No matching Dugout account found. Create a new coach account below.</div> : null}
             </div>
           ) : null}
         </>
       )}
 
       {!selected ? (
-        <div className="coachNewAccountFields">
+        <div className={styles.newFields}>
           <div className="label">OR CREATE A NEW COACH ACCOUNT</div>
           <label>First Name<input name="firstName" /></label>
           <label>Last Name<input name="lastName" /></label>
